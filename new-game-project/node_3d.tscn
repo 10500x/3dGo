@@ -1,0 +1,56 @@
+[gd_scene load_steps=6 format=3 uid="uid://mm5brapqlq8p"]
+
+[ext_resource type="Script" path="res://node_3d.gd" id="1_gd2n4"]
+[ext_resource type="PackedScene" uid="uid://dlk07150fl84b" path="res://piece.glb" id="2_7dpum"]
+
+[sub_resource type="Shader" id="Shader_qe5i2"]
+code = "shader_type spatial;
+
+void fragment() {
+    float grid_size = 9.00;  // Adjust for board size
+	vec2 grid = fract(UV * grid_size * 2.0);  // Increase scaling for visibility
+    float line = step(0.1, min(grid.x, grid.y));  // Increase thickness
+    vec3 color = mix(vec3(0.0), vec3(1.0), line);  // Black background, white lines
+    ALBEDO = color;  // This will help you visualize the grid calculation
+
+}
+"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_37v01"]
+render_priority = 0
+shader = SubResource("Shader_qe5i2")
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ni8dq"]
+
+[node name="Node3D" type="Node3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.425858, 0.509479, -0.447743)
+script = ExtResource("1_gd2n4")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.00629652, -0.0113395, -0.0206489)
+material_override = SubResource("ShaderMaterial_37v01")
+cast_shadow = 0
+mesh = SubResource("PlaneMesh_ni8dq")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 1, 1, 1)
+fov = 60.0
+size = 3.0
+near = 0.5
+far = 1000.0
+
+[node name="OmniLight3D" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3141, 0)
+light_energy = 16.0
+
+[node name="Blanca" parent="." instance=ExtResource("2_7dpum")]
+transform = Transform3D(0.007, 0, 0, 0, 0.007, 0, 0, 0, 0.007, -0.0206395, 0, -0.0182017)
+
+[node name="go" parent="Blanca" index="0"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14.0802, 0, 0)
+
+[node name="Negra" parent="." instance=ExtResource("2_7dpum")]
+transform = Transform3D(0.007, 0, 0, 0, 0.007, 0, 0, 0, 0.007, 0, 0, -0.0141839)
+
+[editable path="Blanca"]
+[editable path="Negra"]
