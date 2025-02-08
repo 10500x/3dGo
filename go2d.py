@@ -2,16 +2,45 @@ import tkinter as tk
 
 root = tk.Tk()
 root.title("Go")
-N = 9  
+N = 9
 
 class Point():
     def __init__(self, coordinates):
         self.coordinates = coordinates 
         self.status = 'empty'
+        self.stoneID = None
         self.neighbors = set()
 
+    def find_conected(self,conected):
+            
+        if self.status != 'empty':
+            conected.add(self)
 
-# Crear puntos
+            for n in self.neighbors-conected:
+                if self.status == n.status:
+                    n.find_conected(conected)
+        return conected
+
+    
+    def death_decision(self): # True = the conected should die
+        conected = set()
+        conected = self.find_conected(conected)
+        b = False
+        if len(conected) != 0: 
+            b = True
+            for m in conected:
+                for q in m.neighbors:
+                    b = b and (q.status != 'empty')
+            if b:
+                for m in conected:
+                    m.status = 'empty'
+                    canvas.delete(m.stoneID)
+        return b 
+
+    
+
+# Crear puntoscd tu-repositorio
+
 Points_matrix = [[[],[],[],[],[],[],[],[],[]],
                  [[],[],[],[],[],[],[],[],[]],
                  [[],[],[],[],[],[],[],[],[]],
@@ -91,61 +120,53 @@ def place_stone(event):
     x = touched_point.coordinates[0]* cell_size + mid_cell_size
     y = touched_point.coordinates[1]* cell_size + mid_cell_size
 
-    if touched_point.status == 'empty':
-        if colour:
-            stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill="black")
-            count = False
-        else:
-            stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill="white")
-            count = False
-    
-    else:
+    b = touched_point.death_decision()
+
+    if b:
         print('invalid')
+    else:
+        if touched_point.status == 'empty':
+
+            if colour:
+                stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill="black")
+                count = False
+            else:
+                stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill="white")
+                count = False
+
+            touched_point.stoneID = stone
+
+        else:
+            print('invalid')
 
     
+
+
 
 
 def update():
     global colour, touched_point, count
-    if colour:
-    
-        touched_point.status = 'black'
-        print('white turn')
-        colour = False
-    else: 
-        
-        touched_point.status = 'white'
-        print('black turn')
-        colour = True
-
-    for i in range(N):
-        for j in range(N):
-
-            print('posicion '+str(i)+str(j),Points_matrix[i][j].status)
-            
-            if Points_matrix[i][j].status == 'empty':
-                continue
-
-            elif Points_matrix[i][j].status == 'black':
-                canvas.create_oval(x-15, y-15, x+15, y+15, fill="black")
-
-            elif Points_matrix[i][j].status == 'white': 
-                canvas.create_oval(x-15, y-15, x+15, y+15, fill="white")
     count = True
 
 
-'''
-def view_neighbors(event):
+    if colour:
+        touched_point.status = 'black'
+        
+        for n in touched_point.neighbors:
+            n.death_decision()
 
-    coord = [round((event.x-mid_cell_size)/cell_size),round((event.y-mid_cell_size) / cell_size)]
-    touched_point = Points_matrix[coord[0]][coord[1]]
-    
-    for n in touched_point.neighbors:
-        x = n.coordinates[0]* cell_size + mid_cell_size
-        y = n.coordinates[1]* cell_size + mid_cell_size
+        print('white turn')
+        colour = False
 
-        canvas.create_oval(x-5, y-5, x+5, y+5, fill="red")
-'''
+    else: 
+        touched_point.status = 'white'
+
+        for n in touched_point.neighbors:
+            n.death_decision()
+
+        print('black turn')
+        colour = True
+
 
 
 for i in range(N):
@@ -160,7 +181,6 @@ for i in range(N):
 
 play = tk.Button(root, text='Play', height=2, width=10, pady = 5,command = update)
 play.pack()
-
 
 canvas.bind('<Button-1>', place_stone)
 
