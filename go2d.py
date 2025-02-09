@@ -194,7 +194,10 @@ def update():
         count = True
 
         touched_point.status = colour
-        for n in touched_point.neighbors:
+        conected = set()
+        conected = touched_point.find_conected(conected)
+        
+        for n in touched_point.neighbors-conected:
                 n.death_decision()
 
         if colour == 'black':
