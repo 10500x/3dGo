@@ -4,15 +4,24 @@ root = tk.Tk()
 root.title("Go")
 N = 9
 
-class Point():
+class Point(): # A point in the board
+    '''
+    This class represents a Point in Go Board 
+    Atributes: 
+    - status : empty, black or white
+    - stoneID : the circle drawn in the cnavas when the point is not empty
+     - neighbors : set of neighbors, initialized empty but assigned manualy, 2,3 or 4, for corner, lateral or central points
+    '''
     def __init__(self, coordinates):
         self.coordinates = coordinates 
-        self.status = 'empty'
-        self.stoneID = None
-        self.neighbors = set()
+        self.status = 'empty'     
+        self.stoneID = None         
+        self.neighbors = set()    
 
-    def find_conected(self,conected):
-            
+    def find_conected(self,conected): 
+        '''
+        returns the set of points that are conected with a specific point
+        '''
         if self.status != 'empty':
             conected.add(self)
 
@@ -22,7 +31,11 @@ class Point():
         return conected
 
     
-    def death_decision(self): # True = the conected should die
+    def death_decision(self, test = False): 
+        '''
+        decides whether a point should die following GO rules, (True = the point should die). If test = True
+        the function does not change the point status nor delete the stone
+        '''
         conected = set()
         conected = self.find_conected(conected)
         b = False
@@ -31,15 +44,15 @@ class Point():
             for m in conected:
                 for q in m.neighbors:
                     b = b and (q.status != 'empty')
-            if b:
+            if (b and not(test)):
                 for m in conected:
                     m.status = 'empty'
                     canvas.delete(m.stoneID)
-        return b 
+        return b
 
     
 
-# Crear puntoscd tu-repositorio
+
 
 Points_matrix = [[[],[],[],[],[],[],[],[],[]],
                  [[],[],[],[],[],[],[],[],[]],
@@ -49,13 +62,14 @@ Points_matrix = [[[],[],[],[],[],[],[],[],[]],
                  [[],[],[],[],[],[],[],[],[]],
                  [[],[],[],[],[],[],[],[],[]],
                  [[],[],[],[],[],[],[],[],[]],
-                 [[],[],[],[],[],[],[],[],[]],]
+                 [[],[],[],[],[],[],[],[],[]],] # matrix where the points ar stored 
+
+
+# asigning neighbors manualy-----------------------------
 
 for i in range(N):
     for j in range(N):
         Points_matrix[i][j] = Point([i,j])
-
-#asignando vecinos 
 
 for i in range(1,N-1):
     Points_matrix[i][0].neighbors.add(Points_matrix[i][1])
@@ -93,6 +107,7 @@ Points_matrix[-1][-1].neighbors.add(Points_matrix[-2][-1])
 Points_matrix[-1][-1].neighbors.add(Points_matrix[-1][-2])
 
 
+# canvas board info
 cell_size = 50
 mid_cell_size = cell_size / 2
 canvas_size = N * cell_size
@@ -103,71 +118,96 @@ canvas.pack()
 mid_cell_size = cell_size / 2
 
 
-colour = True # black = True, white = False
-count = True
 
-
+colour = 'black' # Colour of actual player: black = True, white = False
+count = True # first click (if false, last stone is deleted)
+legal = False # if True, permits update the game
 
 def place_stone(event):
-    global colour, count, stone, touched_point
-
-    if not(count):
-        canvas.delete(stone)
-
+    '''
+    This function draw a stone when the player click the canvas and the movemente is legal.
+    This function chek the rules and does not makes permanent changes in the matrix of points nor
+    in the status of them.  
+    '''
+    global colour, count, stone, touched_point, legal
+    
     coord = [round((event.x-mid_cell_size)/cell_size),round((event.y-mid_cell_size) / cell_size)]
     touched_point = Points_matrix[coord[0]][coord[1]]
     
     x = touched_point.coordinates[0]* cell_size + mid_cell_size
     y = touched_point.coordinates[1]* cell_size + mid_cell_size
 
-    b = touched_point.death_decision()
 
-    if b:
-        print('invalid')
-    else:
-        if touched_point.status == 'empty':
+    if not(count):
+        canvas.delete(stone)
 
-            if colour:
-                stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill="black")
+
+    if touched_point.status == 'empty':
+        
+        touched_point.status = colour
+        b1 = touched_point.death_decision(test = True) # Chek if the touched point makes the conected component to die 
+        touched_point.status = 'empty'
+
+        if b1: 
+
+            b2 = True
+            touched_point.status = colour
+            conected = set()
+            conected = touched_point.find_conected(conected)
+
+
+            for m in conected:
+                for n in m.neighbors-conected:
+                    b2 = b2 and not(n.death_decision(test = True)) # b2 cheks if, the movement kills a conected component of the oponent
+
+            touched_point.status = 'empty'
+
+            if b2:   # if not, the movement is a suicide
+                print('invalid, not suicide')
                 count = False
+                stone = canvas.create_oval(x-1e-16, y-1e-16, x+1e-16, y+1e-16, fill=colour) # ignore this
             else:
-                stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill="white")
+                stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill=colour)
                 count = False
-
-            touched_point.stoneID = stone
-
+                legal = True
+                
+                    
         else:
-            print('invalid')
+            stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill=colour)
+            count = False
+            legal = True
+
+        touched_point.stoneID = stone
+    else:
+        print('invalid, the place is not empty')
 
     
 
-
-
-
 def update():
-    global colour, touched_point, count
-    count = True
+    '''
+    this function activates when the player press the play button, if a movement was made and it is legal, makes permanent de chagnges
+    in the matrix of points and chage the turn. 
+    '''
+    global colour, touched_point, count, legal
+    if legal:
+        legal = False
+        count = True
 
-
-    if colour:
-        touched_point.status = 'black'
-        
+        touched_point.status = colour
         for n in touched_point.neighbors:
-            n.death_decision()
+                n.death_decision()
 
-        print('white turn')
-        colour = False
+        if colour == 'black':
+            colour = 'white'
+        else:
+            colour = 'black'
 
+        print(colour+' turn')
     else: 
-        touched_point.status = 'white'
-
-        for n in touched_point.neighbors:
-            n.death_decision()
-
-        print('black turn')
-        colour = True
+        print('plaese play a legal move')
 
 
+# Draw of the board
 
 for i in range(N):
     
@@ -177,7 +217,7 @@ for i in range(N):
     canvas.create_line(x, mid_cell_size, x, canvas_size - mid_cell_size, fill="black", width=2)
     canvas.create_line(mid_cell_size, y, canvas_size - mid_cell_size, y, fill="black", width=2)
 
-
+# play button
 
 play = tk.Button(root, text='Play', height=2, width=10, pady = 5,command = update)
 play.pack()
