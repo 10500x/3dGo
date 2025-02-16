@@ -4,13 +4,14 @@ root = tk.Tk()
 root.title("Go")
 N = 9
 
-class Point(): # A point in the board
+class Point(): 
     '''
     This class represents a Point in Go Board 
     Atributes: 
+    - coordinates : posicion in the Go Board
     - status : empty, black or white
-    - stoneID : the circle drawn in the cnavas when the point is not empty
-     - neighbors : set of neighbors, initialized empty but assigned manualy, 2,3 or 4, for corner, lateral or central points
+    - stoneID : the circle drawn in the canvas when the point is not empty
+    - neighbors : set of neighbors, initialized empty but assigned manualy, 2,3 or 4, for corner, lateral or central points respectively
     '''
     def __init__(self, coordinates):
         self.coordinates = coordinates 
@@ -20,7 +21,7 @@ class Point(): # A point in the board
 
     def find_conected(self,conected): 
         '''
-        returns the set of points that are conected with a specific point
+        returns the set of points that are conected with a specific point when is not empty 
         '''
         if self.status != 'empty':
             conected.add(self)
@@ -52,8 +53,6 @@ class Point(): # A point in the board
 
     
 
-
-
 Points_matrix = [[[],[],[],[],[],[],[],[],[]],
                  [[],[],[],[],[],[],[],[],[]],
                  [[],[],[],[],[],[],[],[],[]],
@@ -62,7 +61,7 @@ Points_matrix = [[[],[],[],[],[],[],[],[],[]],
                  [[],[],[],[],[],[],[],[],[]],
                  [[],[],[],[],[],[],[],[],[]],
                  [[],[],[],[],[],[],[],[],[]],
-                 [[],[],[],[],[],[],[],[],[]],] # matrix where the points ar stored 
+                 [[],[],[],[],[],[],[],[],[]],] # matrix where the points are stored 
 
 
 # asigning neighbors manualy-----------------------------
@@ -72,7 +71,8 @@ for i in range(N):
         Points_matrix[i][j] = Point([i,j])
 
 for i in range(1,N-1):
-    Points_matrix[i][0].neighbors.add(Points_matrix[i][1])
+    # Lateral points 
+    Points_matrix[i][0].neighbors.add(Points_matrix[i][1])   
     Points_matrix[i][0].neighbors.add(Points_matrix[i+1][0])
     Points_matrix[i][0].neighbors.add(Points_matrix[i-1][0])
 
@@ -89,11 +89,13 @@ for i in range(1,N-1):
     Points_matrix[-1][i].neighbors.add(Points_matrix[-1][i-1])
 
     for j in range(1,N-1):
+        # central points 
         Points_matrix[i][j].neighbors.add(Points_matrix[i+1][j])
         Points_matrix[i][j].neighbors.add(Points_matrix[i-1][j])
         Points_matrix[i][j].neighbors.add(Points_matrix[i][j+1])
         Points_matrix[i][j].neighbors.add(Points_matrix[i][j-1])
 
+# corner points
 Points_matrix[0][0].neighbors.add(Points_matrix[0][1])
 Points_matrix[0][0].neighbors.add(Points_matrix[1][0])
 
@@ -119,7 +121,7 @@ mid_cell_size = cell_size / 2
 
 
 
-colour = 'black' # Colour of actual player: black = True, white = False
+colour = 'black' # Colour of actual player
 count = True # first click (if false, last stone is deleted)
 legal = False # if True, permits update the game
 
@@ -143,33 +145,35 @@ def place_stone(event):
 
 
     if touched_point.status == 'empty':
-        
+
+        # b1 Chek if the touched point makes the conected component to die
         touched_point.status = colour
-        b1 = touched_point.death_decision(test = True) # Chek if the touched point makes the conected component to die 
+        b1 = touched_point.death_decision(test = True)  
         touched_point.status = 'empty'
 
         if b1: 
 
-            b2 = True
+            # if b1 is True, b2 cheks if the movement kills a conected component of the oponent
+            b2 = False
             touched_point.status = colour
             conected = set()
             conected = touched_point.find_conected(conected)
 
-
             for m in conected:
                 for n in m.neighbors-conected:
-                    b2 = b2 and not(n.death_decision(test = True)) # b2 cheks if, the movement kills a conected component of the oponent
+                    b2 = b2 or n.death_decision(test = True)
 
             touched_point.status = 'empty'
 
-            if b2:   # if not, the movement is a suicide
-                print('invalid, not suicide')
-                count = False
-                stone = canvas.create_oval(x-1e-16, y-1e-16, x+1e-16, y+1e-16, fill=colour) # ignore this
-            else:
+            if b2:   # if b2 True, the movement is legal besides b1 
                 stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill=colour)
                 count = False
                 legal = True
+
+            else: # if not, the movement is a suicide
+                print('invalid, not suicide')
+                count = False
+                stone = canvas.create_oval(x-1e-16, y-1e-16, x+1e-16, y+1e-16, fill=colour) # note that this oval is practically invisble
                 
                     
         else:
@@ -185,10 +189,11 @@ def place_stone(event):
 
 def update():
     '''
-    this function activates when the player press the play button, if a movement was made and it is legal, makes permanent de chagnges
+    this function activates when the player press the play button, if a movement was made and it is legal, makes permanents changes
     in the matrix of points and chage the turn. 
     '''
     global colour, touched_point, count, legal
+
     if legal:
         legal = False
         count = True
@@ -196,10 +201,11 @@ def update():
         touched_point.status = colour
         conected = set()
         conected = touched_point.find_conected(conected)
-        
+
         for n in touched_point.neighbors-conected:
                 n.death_decision()
 
+        # changing the turn 
         if colour == 'black':
             colour = 'white'
         else:
