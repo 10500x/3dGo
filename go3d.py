@@ -2,12 +2,13 @@ import tkinter as tk
 
 root = tk.Tk()
 root.title("Go")
+root.geometry('1200x550')
 
 main_frame = tk.Frame(root)
 main_frame.pack(fill="both", expand=True)
 
 main_canvas = tk.Canvas(main_frame)
-main_canvas.pack(side="left", fill="both", expand=True)
+main_canvas.pack(side="top", fill="both", expand=True)
 
 scrollbar = tk.Scrollbar(main_frame, orient="horizontal", command = main_canvas.xview)
 scrollbar.pack(side="bottom", fill="x")
@@ -17,7 +18,7 @@ main_canvas.configure(xscrollcommand = scrollbar.set)
 inner_frame = tk.Frame(main_canvas)
 main_canvas.create_window((0, 0), window = inner_frame, anchor="nw")
 
-N = 9
+N = 4
 cell_size = 50
 mid_cell_size = cell_size / 2
 canvas_size = N * cell_size
@@ -83,7 +84,7 @@ class Point():
 
 tableros = []
 for i in range(N):
-    Board = tk.Canvas(inner_frame,width = cell_size*N,height = cell_size*N, background = 'SystemButtonFace' )
+    Board = tk.Canvas(inner_frame ,width = cell_size*N,height = cell_size*N, background = 'SystemButtonFace' )
 
     for j in range(N):
             
@@ -288,6 +289,8 @@ Points_matrix[0][-1][0].neighbors.add(Points_matrix[0][-1][1])
 colour = 'black' # Colour of actual player
 count = True # first click (if false, last stone is deleted)
 legal = False # if True, permits update the game
+last_stone = None
+last_canvas = None 
 
 def place_stone(event,canv_id):
     '''
@@ -295,7 +298,14 @@ def place_stone(event,canv_id):
     This function chek the rules and does not makes permanent changes in the matrix of points nor
     in the status of them.  
     '''
-    global colour, count, stone, touched_point, legal
+    global colour, count, last_stone, last_canvas, touched_point, legal
+    
+    canvas = event.widget
+
+    if not(count) and last_stone is not None and last_canvas is not None:
+        last_canvas.delete(last_stone)
+
+    last_canvas = canvas
 
     idx = 0
     for t in tableros:
@@ -304,18 +314,11 @@ def place_stone(event,canv_id):
         else:
             break
 
-    canvas = event.widget
-
     coord = [round((event.x-mid_cell_size)/cell_size),round((event.y-mid_cell_size) / cell_size)]
     touched_point = Points_matrix[coord[0]][coord[1]][idx]
     
     x = touched_point.coordinates[0]* cell_size + mid_cell_size
     y = touched_point.coordinates[1]* cell_size + mid_cell_size
-
-
-    if not(count):
-        canvas.delete(stone)
-
 
     if touched_point.status == 'empty':
 
@@ -339,28 +342,28 @@ def place_stone(event,canv_id):
             touched_point.status = 'empty'
 
             if b2:   # if b2 True, the movement is legal besides b1 
-                stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill=colour)
+                last_stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill=colour)
                 count = False
                 legal = True
 
             else: # if not, the movement is a suicide
                 print('invalid, not suicide')
                 count = False
-                stone = canvas.create_oval(x-1e-16, y-1e-16, x+1e-16, y+1e-16, fill=colour) # note that this oval is practically invisble
+                last_stone = canvas.create_oval(x-1e-16, y-1e-16, x+1e-16, y+1e-16, fill=colour) # note that this oval is practically invisble
                 
                     
         else:
-            stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill=colour)
+            last_stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill=colour)
             count = False
             legal = True
 
-        touched_point.stoneID = stone
+        touched_point.stoneID = last_stone
     else:
         print('invalid, the place is not empty')
 
     
 
-def update():
+def update(event):
     '''
     this function activates when the player press the play button, if a movement was made and it is legal, makes permanents changes
     in the matrix of points and chage the turn. 
@@ -393,8 +396,14 @@ def update():
 
 # play button
 
+'''
 play = tk.Button(inner_frame, text='Play', height=2, width=10, pady = 5,command = update)
-play.grid(row = 1, column = 5)
+play.grid(row = 1, column = 4)
+
+'''
+
+
+root.bind('<space>',update)
 
 
 for T in tableros:
