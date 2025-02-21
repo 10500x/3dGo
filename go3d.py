@@ -1,8 +1,16 @@
 import tkinter as tk
 
+N = 9
+cell_size = 50
+mid_cell_size = cell_size / 2
+canvas_size = N * cell_size
+mid_cell_size = cell_size / 2
+
+
+
 root = tk.Tk()
 root.title("Go")
-root.geometry('1200x550')
+root.geometry('1200x'+str(int(canvas_size+30)))
 
 main_frame = tk.Frame(root)
 main_frame.pack(fill="both", expand=True)
@@ -18,11 +26,7 @@ main_canvas.configure(xscrollcommand = scrollbar.set)
 inner_frame = tk.Frame(main_canvas)
 main_canvas.create_window((0, 0), window = inner_frame, anchor="nw")
 
-N = 4
-cell_size = 50
-mid_cell_size = cell_size / 2
-canvas_size = N * cell_size
-mid_cell_size = cell_size / 2
+
 
 '''
 class Go_Board():
@@ -82,15 +86,17 @@ class Point():
 
 # Draw of the board
 
+abc = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N']
+
 tableros = []
 for i in range(N):
     Board = tk.Canvas(inner_frame ,width = cell_size*N,height = cell_size*N, background = 'SystemButtonFace' )
-
     for j in range(N):
             
         x = j * cell_size + mid_cell_size
         y = j * cell_size + mid_cell_size
-            
+        label = tk.Label(inner_frame,text=abc[j], font=('Arial',14))
+        Board.create_window(x,0, window = label)
         Board.create_line(x, mid_cell_size, x, canvas_size - mid_cell_size, fill="black", width=2)
         Board.create_line(mid_cell_size, y, canvas_size - mid_cell_size, y, fill="black", width=2)
 
@@ -109,7 +115,7 @@ for i in range(N):
         for k in range(N):
             Points_matrix[i][j].append([])
             Points_matrix[i][j][k] = Point([i,j,k])
-            Points_matrix[i][j][k].canvas = tableros[i]    #  i or j or k ? im not Sure, Testear !!!!!!!!!!!!!!!!!!!
+            Points_matrix[i][j][k].canvas = tableros[k]    #  i or j or k ? im not Sure, Testear !!!!!!!!!!!!!!!!!!!
 
 
 for i in range(1,N-1):
@@ -207,7 +213,7 @@ for i in range(1,N-1):
         #3
         Points_matrix[i][0][j].neighbors.add(Points_matrix[i][1][j])
         Points_matrix[i][0][j].neighbors.add(Points_matrix[i-1][0][j])
-        Points_matrix[i][0][j].neighbors.add(Points_matrix[i+1][0][-j])
+        Points_matrix[i][0][j].neighbors.add(Points_matrix[i+1][0][j])
         Points_matrix[i][0][j].neighbors.add(Points_matrix[i][0][j-1])
         Points_matrix[i][0][j].neighbors.add(Points_matrix[i][0][j+1])
 
@@ -221,7 +227,7 @@ for i in range(1,N-1):
         #5
         Points_matrix[0][i][j].neighbors.add(Points_matrix[1][i][j])
         Points_matrix[0][i][j].neighbors.add(Points_matrix[0][i-1][j])
-        Points_matrix[0][i][j].neighbors.add(Points_matrix[0][i+1][-j])
+        Points_matrix[0][i][j].neighbors.add(Points_matrix[0][i+1][j])
         Points_matrix[0][i][j].neighbors.add(Points_matrix[0][i][j-1])
         Points_matrix[0][i][j].neighbors.add(Points_matrix[0][i][j+1])
 
@@ -316,6 +322,7 @@ def place_stone(event,canv_id):
 
     coord = [round((event.x-mid_cell_size)/cell_size),round((event.y-mid_cell_size) / cell_size)]
     touched_point = Points_matrix[coord[0]][coord[1]][idx]
+    print('toched_point = ',str(coord[0])+str(coord[1])+str(idx))
     
     x = touched_point.coordinates[0]* cell_size + mid_cell_size
     y = touched_point.coordinates[1]* cell_size + mid_cell_size
@@ -392,16 +399,11 @@ def update(event):
         print('plaese play a legal move')
 
 
-
-
-# play button
-
 '''
 play = tk.Button(inner_frame, text='Play', height=2, width=10, pady = 5,command = update)
 play.grid(row = 1, column = 4)
 
 '''
-
 
 root.bind('<space>',update)
 

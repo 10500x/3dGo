@@ -2,6 +2,7 @@ import tkinter as tk
 
 root = tk.Tk()
 root.title("Go")
+
 N = 9
 
 class Point(): 
