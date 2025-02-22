@@ -1,6 +1,6 @@
 import tkinter as tk
 
-N = 9
+N = 5
 cell_size = 50
 mid_cell_size = cell_size / 2
 canvas_size = N * cell_size
@@ -10,7 +10,7 @@ mid_cell_size = cell_size / 2
 
 root = tk.Tk()
 root.title("Go")
-root.geometry('1200x'+str(int(canvas_size+30)))
+root.geometry('1400x'+str(int(canvas_size+30)))
 
 main_frame = tk.Frame(root)
 main_frame.pack(fill="both", expand=True)
@@ -79,8 +79,10 @@ class Point():
                     b = b and (q.status != 'empty')
             if (b and not(test)):
                 for m in conected:
+                    canvas = m.canvas
                     m.status = 'empty'
-                    self.canvas.delete(m.stoneID)
+                    print('-------------')
+                    canvas.delete(m.stoneID)
         return b
 
 
@@ -96,11 +98,11 @@ for i in range(N):
         x = j * cell_size + mid_cell_size
         y = j * cell_size + mid_cell_size
         label = tk.Label(inner_frame,text=abc[j], font=('Arial',14))
-        Board.create_window(x,0, window = label)
+        Board.create_window(x,-5, window = label)
         Board.create_line(x, mid_cell_size, x, canvas_size - mid_cell_size, fill="black", width=2)
         Board.create_line(mid_cell_size, y, canvas_size - mid_cell_size, y, fill="black", width=2)
 
-    Board.grid(row = 0, column = i, padx = 10, pady = 10)
+    Board.grid(row = 0, column = i, padx = 10, pady = 20)
 
     tableros.append(Board)
 
@@ -310,6 +312,7 @@ def place_stone(event,canv_id):
 
     if not(count) and last_stone is not None and last_canvas is not None:
         last_canvas.delete(last_stone)
+
 
     last_canvas = canvas
 
