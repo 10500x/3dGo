@@ -1,12 +1,14 @@
 import tkinter as tk
 
+# Board info
+
 N = 5
 cell_size = 50
 mid_cell_size = cell_size / 2
 canvas_size = N * cell_size
 mid_cell_size = cell_size / 2
 
-
+# Window configuration
 
 root = tk.Tk()
 root.title("Go")
@@ -26,14 +28,7 @@ main_canvas.configure(xscrollcommand = scrollbar.set)
 inner_frame = tk.Frame(main_canvas)
 main_canvas.create_window((0, 0), window = inner_frame, anchor="nw")
 
-
-
-'''
-class Go_Board():
-    def __init__(self,frame,board_id):
-        self.board_id = board_id
-        self.canvas = tk.Canvas(frame,width = 450,height = 450, background = 'SystemButtonFace')  
-'''
+# Point class
 
 class Point(): 
     '''
@@ -41,8 +36,9 @@ class Point():
     Atributes: 
     - coordinates : posicion in the Go Board
     - status : empty, black or white
+    - canvas : canvas that represents the board where the point is
     - stoneID : the circle drawn in the canvas when the point is not empty
-    - neighbors : set of neighbors, initialized empty but assigned manualy, 2,3 or 4, for corner, lateral or central points respectively
+    - neighbors : set of neighbors, initialized empty but assigned manualy, 3,4, 5 or 6, for corner, edge, lateral or central points respectively
     '''
     def __init__(self, coordinates):
         self.coordinates = coordinates 
@@ -53,7 +49,7 @@ class Point():
 
     def find_conected(self,conected): 
         '''
-        returns the set of points that are conected with a specific point when is not empty 
+        returns the set of all the points of the same color that are conected with the point.
         '''
         if self.status != 'empty':
             conected.add(self)
@@ -66,8 +62,9 @@ class Point():
     
     def death_decision(self, test = False): 
         '''
-        decides whether a point should die following GO rules, (True = the point should die). If test = True
-        the function does not change the point status nor delete the stone
+        decides whether a point should die, (True = the point should die). If test = True
+        the function does not change the point status nor delete the stone, if test = False
+        the function deletes permanently all the conectd component of the point and changes the stastus of them. 
         '''
         conected = set()
         conected = self.find_conected(conected)
@@ -81,16 +78,16 @@ class Point():
                 for m in conected:
                     canvas = m.canvas
                     m.status = 'empty'
-                    print('-------------')
                     canvas.delete(m.stoneID)
         return b
 
 
-# Draw of the board
+# Drawing the boards
 
 abc = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N']
 
 tableros = []
+
 for i in range(N):
     Board = tk.Canvas(inner_frame ,width = cell_size*N,height = cell_size*N, background = 'SystemButtonFace' )
     for j in range(N):
@@ -99,6 +96,7 @@ for i in range(N):
         y = j * cell_size + mid_cell_size
         label = tk.Label(inner_frame,text=abc[j], font=('Arial',14))
         Board.create_window(x,-5, window = label)
+
         Board.create_line(x, mid_cell_size, x, canvas_size - mid_cell_size, fill="black", width=2)
         Board.create_line(mid_cell_size, y, canvas_size - mid_cell_size, y, fill="black", width=2)
 
@@ -106,7 +104,7 @@ for i in range(N):
 
     tableros.append(Board)
 
-# asigning neighbors manualy-----------------------------
+# asigning neighbors manualy
 
 Points_matrix = []
 
@@ -116,8 +114,9 @@ for i in range(N):
         Points_matrix[i].append([])
         for k in range(N):
             Points_matrix[i][j].append([])
+
             Points_matrix[i][j][k] = Point([i,j,k])
-            Points_matrix[i][j][k].canvas = tableros[k]    #  i or j or k ? im not Sure, Testear !!!!!!!!!!!!!!!!!!!
+            Points_matrix[i][j][k].canvas = tableros[k]   
 
 
 for i in range(1,N-1):
@@ -291,8 +290,7 @@ Points_matrix[0][-1][0].neighbors.add(Points_matrix[1][-1][0])
 Points_matrix[0][-1][0].neighbors.add(Points_matrix[0][-2][0])
 Points_matrix[0][-1][0].neighbors.add(Points_matrix[0][-1][1])
 
-# canvas board info
-
+# principal functions
 
 colour = 'black' # Colour of actual player
 count = True # first click (if false, last stone is deleted)
@@ -303,7 +301,7 @@ last_canvas = None
 def place_stone(event,canv_id):
     '''
     This function draw a stone when the player click the canvas and the movemente is legal.
-    This function chek the rules and does not makes permanent changes in the matrix of points nor
+    This function check the rules and does not makes permanent changes in the matrix of points nor
     in the status of them.  
     '''
     global colour, count, last_stone, last_canvas, touched_point, legal
@@ -325,7 +323,8 @@ def place_stone(event,canv_id):
 
     coord = [round((event.x-mid_cell_size)/cell_size),round((event.y-mid_cell_size) / cell_size)]
     touched_point = Points_matrix[coord[0]][coord[1]][idx]
-    print('toched_point = ',str(coord[0])+str(coord[1])+str(idx))
+    
+    #print('toched_point = ',str(coord[0])+str(coord[1])+str(idx))
     
     x = touched_point.coordinates[0]* cell_size + mid_cell_size
     y = touched_point.coordinates[1]* cell_size + mid_cell_size
@@ -360,7 +359,6 @@ def place_stone(event,canv_id):
                 print('invalid, not suicide')
                 count = False
                 last_stone = canvas.create_oval(x-1e-16, y-1e-16, x+1e-16, y+1e-16, fill=colour) # note that this oval is practically invisble
-                
                     
         else:
             last_stone = canvas.create_oval(x-15, y-15, x+15, y+15, fill=colour)
@@ -375,8 +373,8 @@ def place_stone(event,canv_id):
 
 def update(event):
     '''
-    this function activates when the player press the play button, if a movement was made and it is legal, makes permanents changes
-    in the matrix of points and chage the turn. 
+    this function activates when the player press the space key, if a movement was made and it is legal, makes permanents changes
+    in the matrix of points and change the turn. 
     '''
     global colour, touched_point, count, legal
 
@@ -405,7 +403,6 @@ def update(event):
 '''
 play = tk.Button(inner_frame, text='Play', height=2, width=10, pady = 5,command = update)
 play.grid(row = 1, column = 4)
-
 '''
 
 root.bind('<space>',update)
