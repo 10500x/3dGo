@@ -7,20 +7,18 @@ class Camera():
         self.mouseWatcherNode = base.mouseWatcherNode  # Get mouse input
         # Las coordenadas son en (x,y,z)
         # Variables de la cámara en coordenadas esféricas
-        self.center = (grid_size/2, grid_size/2, grid_size/2) # Nos posicionamos en el centro de la  grilla a generar.
-        self.radius = 20     # Radio de la esfera inicial
-        self.theta = 0       # Ángulo horizontal (en radianes)
-        self.phi = math.pi / 4  # Ángulo vertical (en radianes)
+        self.center = ((grid_size - 1) / 2, (grid_size - 1) / 2, (grid_size - 1) / 2) # Nos posicionamos en el centro de la  grilla a generar.
+        self.radius = 30     # Radio de la esfera inicial
+        self.theta = -math.pi/2    # Ángulo horizontal (en radianes) 
+        self.phi = math.pi/2 # Ángulo vertical (en radianes)
         # Variables para el control de la cámara
         self.spacebar_held = False
         self.last_mouse_pos = None
-                # Start task for continuous rotation update
+        # Start task for continuous rotation update
         self.base.taskMgr.add(self.update_camera_rotation, "update_camera_rotation")
-
         # Set initial camera position
         self.update_camera_position()
-
-
+        
     #########  Movimientos de cámara
     def start_rotation(self):
         #Activa la rotación de la cámara al presionar la barra
@@ -90,4 +88,4 @@ class Camera():
         z = self.center[2] + self.radius * math.cos(self.phi)
 
         self.camera.setPos(x, y, z)
-        self.camera.lookAt(self.center)  # Hacer que la cámara siempre mire al centro
+        self.camera.lookAt(*self.center)  # Camera always look to the center
