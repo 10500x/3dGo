@@ -1,4 +1,4 @@
-win-size 1024 700
+win-size 800 600
 window-title Go3d
 sync-video false
 show-frame-rate-meter true

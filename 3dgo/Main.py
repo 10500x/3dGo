@@ -3,156 +3,165 @@ from direct.showbase.ShowBase import ShowBase
 from direct.gui.OnscreenText import OnscreenText
 from direct.gui.DirectGui import DirectEntry, DirectButton, DGG
 from camera import Camera
-from panda3d.core import loadPrcFile
-loadPrcFile("config\conf.prc")
+from panda3d.core import loadPrcFile, Point3
+
+# Load configuration file
+loadPrcFile("config/conf.prc")
+
 class GridDemo(ShowBase):
     def __init__(self, size):
-        ShowBase.__init__(self)
-        self.size = size # Store grid size
-        self.setBackgroundColor(0.0,0.75,0.75)
-        #Collision system this shit it's right from the panda3d documentation, no idea how it works, it just does
-        self.cTrav = CollisionTraverser()
-        self.pickerQueue = CollisionHandlerQueue()
-        self.pickerNode = CollisionNode("mouseRay")
-        self.pickerNP = self.camera.attachNewNode(self.pickerNode)  # Attached to camera
-        self.pickerRay = CollisionRay()
-        self.pickerNode.addSolid(self.pickerRay)
-        self.pickerNode.setFromCollideMask(1)
-        self.cTrav.addCollider(self.pickerNP, self.pickerQueue)
-        #Collision system
-        
-        self.disableMouse() #Disable camera default movement
-        self.camera_control = Camera(self, size) #Call Camera from camera.py for camera movement 
-        #Binds
-        self.accept("space", self.camera_control.start_rotation)  # set space for camera rotation
-        self.accept("space-up", self.camera_control.stop_rotation)# set space-up, that is when space it's not pressed to the stop rotate funtion
-        self.accept("wheel_up", self.camera_control.zoom_in)      # set the mouse wheel to zoom in and out.
-        self.accept("wheel_down", self.camera_control.zoom_out)   #
-        self.accept("mouse1", self.check_click)          #set mouse1, left click to the funtion check_click (the one that spawns a ball)
-        self.accept("mouse3", self.change_camera_center) #set mouse3, right click to the funtion that changes the center when click on a collision sphere
-        self.accept("r", self.center_center)             #set r to the funtion that reset the camera to the center
-        self.accept("arrow_left", self.camera_control.rotate_left) # Bind arrow keys for movement, fixed angle.
+        """Initialize the 3D Go game with a grid of specified size."""
+        super().__init__()
+        self.size = size  # Grid size (e.g., 5 for 5x5x5)
+        self.setBackgroundColor(0.0, 0.75, 0.75)  # Set turquoise background
+
+        # Set up collision system for mouse picking (from Panda3D documentation)
+        self.setup_collision_system()
+
+        # Disable default mouse control and initialize custom camera
+        self.disableMouse()
+        self.camera_control = Camera(self, size)
+
+        # Bind keyboard and mouse inputs
+        self.bind_inputs()
+
+        # Initialize game state
+        self.vertices = []  # List of vertex positions (x, y, z)
+        self.edges = []     # List of edges connecting vertices
+        self.balls = {}     # Dictionary to track placed balls: (x, y, z) -> {'node': NodePath, 'color': int}
+        self.current_color = 0  # 0 = black, 1 = white
+        self.turn = 1       # Start with turn 1
+
+        # Place initial black ball at (0, 0, 0)
+        self.place_initial_ball()
+
+        # Generate the 3D grid with collision spheres
+        self.generate_grid()
+
+        # Set up GUI for coordinate input and turn display
+        self.setup_gui()
+
+    def setup_collision_system(self):
+        """Configure the collision system for mouse picking."""
+        self.cTrav = CollisionTraverser()  # Collision traverser for raycasting
+        self.pickerQueue = CollisionHandlerQueue()  # Queue to store collision results
+        self.pickerNode = CollisionNode("mouseRay")  # Node for the ray
+        self.pickerNP = self.camera.attachNewNode(self.pickerNode)  # Attach ray to camera
+        self.pickerRay = CollisionRay()  # Ray for detecting collisions
+        self.pickerNode.addSolid(self.pickerRay)  # Add ray to the node
+        self.pickerNode.setFromCollideMask(1)  # Set collision mask to detect only objects with mask 1
+        self.cTrav.addCollider(self.pickerNP, self.pickerQueue)  # Add collider to traverser
+
+    def bind_inputs(self):
+        """Bind keyboard and mouse inputs for game controls."""
+        # Camera controls
+        self.accept("space", self.camera_control.start_rotation)
+        self.accept("space-up", self.camera_control.stop_rotation)
+        self.accept("wheel_up", self.camera_control.zoom_in)
+        self.accept("wheel_down", self.camera_control.zoom_out)
+        self.accept("arrow_left", self.camera_control.rotate_left)
         self.accept("arrow_right", self.camera_control.rotate_right)
         self.accept("arrow_up", self.camera_control.rotate_up)
         self.accept("arrow_down", self.camera_control.rotate_down)
-    
 
-        ########### WIP
-        #self.accept("w",self.show_one_horizontal_plane) 
-        #self.accept("s") 
-        #self.accept("a") 
-        #self.accept("d") 
-        #self.accept("t") #
-        # Binds
+        # Game controls
+        self.accept("mouse1", self.check_click)  # Left click to place pieces
+        self.accept("mouse3", self.change_camera_center)  # Right click to center camera
+        self.accept("r", self.reset_camera)  # Reset camera to grid center
+        self.accept("w", self.show_one_floor, [None])  # Show next horizontal plane
+        self.accept("s", self.show_everything)  # Show all planes
 
-    
-        #self.Vertex = []
-        self.Edges = []
-        self.balls = {}  # Dictionary to track balls: (x, y, z) -> {'node': NodePath, 'color': int}
-        self.current_model_index = 0  # 0 = black, 1 = white
-        self.turn= 1 #set the turn counter to 1.
-        
+    def place_initial_ball(self):
+        """Place a black ball at (0, 0, 0) as the starting piece."""
+        initial_ball = self.loader.loadModel("smiley")
+        initial_ball.setPos(0, 0, 0)
+        initial_ball.setTexture(self.loader.loadTexture("textures/black.png"), 1)
+        initial_ball.setScale(0.11)
+        initial_ball.reparentTo(self.render)
 
-        # (0,0,0) is represented by using a black ball
-        model000 = self.loader.loadModel("smiley")
-        model000.setPos(0,0,0)
-        model000.setTexture(self.loader.loadTexture("textures/black.png"), 1)
-        model000.reparentTo(self.render)
-        model000.setScale(0.11)
-        #(0,0,0)
-
-    #######Grid generation
-        for x in range(size):
-            for y in range(size):
-                for z in range(size):
-                    vertex_node = NodePath(f"vertex_{x}_{y}_{z}")
+    def generate_grid(self):
+        """Generate the 3D grid with collision spheres and edges."""
+        self.nodes = []  # List to store grid node paths
+        for x in range(self.size):
+            for y in range(self.size):
+                for z in range(self.size):
+                    # Create vertex node
+                    vertex_node = NodePath(f"vertex_{x},{y},{z}")
                     vertex_node.setPos(x, y, z)
                     vertex_node.reparentTo(self.render)
-                    #cs= CollisionBox(0, 0.1, 0.1,0.1) #Uses boxes instead of spheres, it's just worst for performance, sad.
-                    cs = CollisionSphere(0, 0, 0, 0.1)
-                    cnodePath = vertex_node.attachNewNode(CollisionNode(f'cnode_{x}_{y}_{z}'))
-                    cnodePath.node().addSolid(cs)
-                    cnodePath.node().setIntoCollideMask(1)
-                    cnodePath.setColor(0.5, 0.5, 0.5, 1)
-                    cnodePath.show()
-                    if x + 1 < size:
-                        self.Edges.append(((x, y, z), (x + 1, y, z)))
-                    if y + 1 < size:
-                        self.Edges.append(((x, y, z), (x, y + 1, z)))
-                    if z + 1 < size:
-                        self.Edges.append(((x, y, z), (x, y, z + 1)))
 
+                    # Add collision sphere
+                    collision_sphere = CollisionSphere(0, 0, 0, 0.1)  # Small radius for clickable spots
+                    collision_node = vertex_node.attachNewNode(CollisionNode(f'cnode_{x}{y}{z}'))
+                    collision_node.node().addSolid(collision_sphere)
+                    collision_node.node().setIntoCollideMask(1)  # Set collision mask
+                    collision_node.show()  # Show collision spheres
+                    collision_node.setColor(0.5, 0.5, 0.5, 1)  # Gray color for visibility
 
+                    # Connect to adjacent vertices (edges)
+                    if x + 1 < self.size:
+                        self.edges.append(((x, y, z), (x + 1, y, z)))
+                    if y + 1 < self.size:
+                        self.edges.append(((x, y, z), (x, y + 1, z)))
+                    if z + 1 < self.size:
+                        self.edges.append(((x, y, z), (x, y, z + 1)))
 
-    ##############GUI
-        self.setup_gui()
-        self.textObject = OnscreenText(text="Turn:  "+str(self.turn)+"", pos=(-1, 0.90), scale=0.07)#First turn text
-        self.textObject2 = OnscreenText(text="Press space and move the mouse to rotate", pos=(0, 0.90), scale=0.07)
-        self.textObject2 = OnscreenText(text="Left click to play\nRight click to change the center\nR to reset camera", pos=(-0.95, 0.8), scale=0.07)
+                    # Store vertex and node
+                    self.vertices.append((x, y, z))
+                    self.nodes.append(vertex_node)
+
     def setup_gui(self):
-        """Set up GUI elements for coordinate input."""
-        # Create a text label for instructions
-        self.textObject3 = OnscreenText(text="Enter x,y,z", pos=(-0.99, -0.90, 0), scale=0.07)
-        # Bind a click event to set focus on the entry
-        
-        # Create an entry field for coordinate input
+        """Set up GUI elements for coordinate input and turn display."""
+        # Display turn and instructions
+        self.turn_text = OnscreenText(
+            text=f"Turn: {self.turn}\nPress space and move the mouse to rotate\nLeft click to play\nRight click to change the center\nR to reset camera\nW to move between planes\nS to see the whole grid.",
+            pos=(-1.9, 0.90), scale=0.07, align=TextNode.ALeft
+        )
+
+        # Instruction for coordinate input
+        self.coord_label = OnscreenText(
+            text="Enter x,y,z", pos=(-1.9, -0.90), scale=0.07, align=TextNode.ALeft
+        )
+
+        # Create entry field for coordinate input
         self.coord_entry = DirectEntry(
-            text="" , 
-            scale=.05,
-            command=self.process_coordinates,
-            initialText="",
-            numLines=1,
-            focus=0,
-            pos=(-0.8, 0, -0.9),  # Position below the turn text
-            frameColor=(0, 0, 0, 0.5),  # Semi-transparent black frame
-            text_fg=(1, 1, 1, 1),  # White text
-            width=10
+            text="", scale=0.05, command=self.process_coordinates,
+            initialText="", numLines=1, focus=0,
+            pos=(-1.5, 0, -0.9), frameColor=(0, 0, 0, 0.5),
+            text_fg=(1, 1, 1, 1), width=6
         )
         self.coord_entry.bind(DGG.ENTER, self.process_coordinates)
 
-        # Create a button to submit coordinates
+        # Create button to submit coordinates
         self.submit_button = DirectButton(
-            text="Submit Move",
-            scale=0.05,
-            command=self.process_coordinates,
-            pos=(-0, 0, -0.9),  # Position next to the entry field
-            frameColor=(0, 1, 0, 0.5),  # Semi-transparent green frame
-            text_fg=(1, 1, 1, 1)  # White text
+            text="Submit Move", scale=0.05, command=self.process_coordinates,
+            pos=(-1, 0, -0.9), frameColor=(0, 1, 0, 0.5), text_fg=(1, 1, 1, 1)
         )
-    
+
     def process_coordinates(self, input_text=None):
-        """Process the coordinates entered by the player and make a move."""
+        """Process player-entered coordinates and make a move."""
         text = self.coord_entry.get() if input_text is None else input_text
         try:
-            # Parse the input (e.g., "0,0,0" into x, y, z)
             coords = [int(x.strip()) for x in text.split(',')]
             if len(coords) != 3:
                 print("Invalid input: Please enter three numbers separated by commas (e.g., 0,0,0)")
                 return
             x, y, z = coords
 
-            # Validate coordinates are within grid bounds
             if not (0 <= x < self.size and 0 <= y < self.size and 0 <= z < self.size):
                 print(f"Coordinates {x},{y},{z} are outside the grid bounds ({self.size}x{self.size}x{self.size})")
                 return
 
-            pos_tuple = (x, y, z)
-
-            # Check if position is already occupied
-            if pos_tuple in self.balls:
-                print(f"Position {pos_tuple} already occupied")
+            pos = (x, y, z)
+            if pos in self.balls:
+                print(f"Position {pos} already occupied")
                 return
 
-            # Allow the move and spawn the piece
-            self.spawn_model(pos_tuple)
-            self.turn += 1  # Increment turn
+            self.spawn_model(pos)
+            self.turn += 1
             print(f"Turn incremented to: {self.turn}")
-
-            # Update the turn text
             self.turn_text.setText(f"Turn: {self.turn}\nPress space and move the mouse to rotate\nLeft click to play\nRight click to change the center\nR to reset camera")
-
-            # Clear focus after submission
-            self.coord_entry["focus"] = 0
+            self.coord_entry["focus"] = 0  # Clear focus after submission
             print("Entry field focus cleared after submission")
 
         except ValueError:
@@ -160,112 +169,10 @@ class GridDemo(ShowBase):
         except Exception as e:
             print(f"Error processing coordinates: {e}")
 
-
-    def show_one_horizontal_plane(self): #wip
-        print(self.balls)
-        for x in range (0,self.size):
-            for y in range (0,self.size):
-                vertex_node = NodePath(f"vertex_{x}_{y}_{0}")
-                cnodePath = vertex_node.attachNewNode(CollisionNode(f'cnode_{x}_{y}_{0}'))
-                cnodePath.show(False)
-                
-    #def show_one_vertcal_plane(): #wip
-    #    asd
-    #def show_every_plane():
-    #    asd
-    
-    #Funtion that when click on a collision sphere checks for its liberties, by calling the funtion get_adjacent_positions
-    def has_liberty(self, pos):
-        """Check if the position has at least one empty adjacent spot."""
-        adj_positions = self.get_adjacent_positions(pos)
-        for adj_pos in adj_positions:
-            if adj_pos not in self.balls:
-                return True
-        return False
-    #Funtion that when click on a collision sphere checks for it's adjacent positons
-    def get_adjacent_positions(self, pos):
-        """Return list of adjacent positions."""
-        x, y, z = pos
-        adj = [
-            (x + 1, y, z), (x - 1, y, z),
-            (x, y + 1, z), (x, y - 1, z),
-            (x, y, z + 1), (x, y, z - 1)
-        ]
-        return [(ax, ay, az) for ax, ay, az in adj if 0 <= ax < self.size and 0 <= ay < self.size and 0 <= az < self.size]
-
-    def get_group(self, pos, color, visited=None):
-        """Find all connected balls of the same color using DFS, tracking visited positions."""
-        if visited is None:
-            visited = set()
-        
-        if pos not in self.balls or self.balls[pos]['color'] != color or pos in visited:
-            return set()
-        
-        group = set()
-        to_check = [pos]
-        while to_check:
-            current = to_check.pop()
-            if current in visited or current not in self.balls or self.balls[current]['color'] != color:
-                continue
-            visited.add(current)
-            group.add(current)
-            for adj_pos in self.get_adjacent_positions(current):
-                if adj_pos not in visited and adj_pos in self.balls and self.balls[adj_pos]['color'] == color:
-                    to_check.append(adj_pos)
-        #print(f"Group for {pos} (color {color}): {group}") #debug
-        return group
-
-    def group_has_liberty(self, group):
-        """Check if a group of balls has at least one liberty (empty adjacent position)."""
-        visited = set()
-        for pos in group:
-            if pos in visited:
-                continue
-            for adj_pos in self.get_adjacent_positions(pos):
-                #print(f"Checking liberty for {pos}: adjacent position {adj_pos}")#debug
-                if adj_pos not in self.balls:  # Only count empty positions as liberties
-                    #print(f"Group {group} has liberty at {adj_pos}")#debug
-                    return True #Found a liberty.
-                # Ensure we don’t count positions within the group as liberties
-                if adj_pos in group:
-                    #print(f"Skipping {adj_pos} as it’s part of the group")#debug
-                    continue #No liberty, keep searching
-            visited.add(pos)
-        #print(f"Group {group} has no liberties")#debug
-        return False
-
-    def remove_group(self, group):
-        """Despawn all balls in the group."""
-        for pos in group:
-            if pos in self.balls:
-                self.balls[pos]['node'].removeNode()
-                del self.balls[pos]
-                #print(f"Despawned ball at {pos}") #degub
-
-    #Funtion that positions the camera to the center of the grid (the default position) by using Camera.py after pressing R
-    def center_center(self):
-        self.camera_control.center = ((self.size - 1) / 2, (self.size - 1) / 2, (self.size - 1) / 2)
-        self.camera_control.update_camera_position()
-
-    #Funtion that changes the camera center. by using Camera.py
-    def change_camera_center(self):
-        if self.mouseWatcherNode.hasMouse():
-            mpos = self.mouseWatcherNode.getMouse()
-            self.pickerRay.setFromLens(self.camNode, mpos.getX(), mpos.getY())
-
-            self.cTrav.traverse(self.render)
-            if self.pickerQueue.getNumEntries() > 0:
-                self.pickerQueue.sortEntries()
-                hit = self.pickerQueue.getEntry(0)
-                vertex_node = hit.getIntoNodePath().getParent()
-                pos = vertex_node.getPos(self.render)
-                # Update the camera center to the clicked position, by giving camera_control.center the positon of the node we just right clicked.
-                self.camera_control.center = pos
-                # Update the camera position to maintain the current radius, theta, and phi around the new center
-                self.camera_control.update_camera_position()
-        
     def check_click(self):
+        """Handle left-click to place a piece on a collision sphere."""
         if not self.mouseWatcherNode.hasMouse():
+            print("No mouse input detected")
             return
 
         mpos = self.mouseWatcherNode.getMouse()
@@ -279,59 +186,171 @@ class GridDemo(ShowBase):
             pos = vertex_node.getPos(self.render)
             pos_tuple = (int(round(pos.x)), int(round(pos.y)), int(round(pos.z)))
 
-            #print(f"Clicked position (raw): {pos}")            #Debug
-            #print(f"Clicked position (rounded): {pos_tuple}")  #Debug
-
-            # Check if position is within grid bounds (basic validation)
             if not (0 <= pos_tuple[0] < self.size and 0 <= pos_tuple[1] < self.size and 0 <= pos_tuple[2] < self.size):
                 print(f"Position {pos_tuple} is outside the grid bounds ({self.size}x{self.size}x{self.size})")
                 return
 
-            # Check if position is already occupied
             if pos_tuple in self.balls:
                 print(f"Position {pos_tuple} already occupied")
                 return
-            #If the collisionsphere has no ball and, has at least one liberty, spawns a ball and passes the turn.
-            self.spawn_model(pos_tuple) # Spawn the ball
-            self.textObject.destroy() #Destroy the first turn text
-            self.turn+=1 #add 1 to the turn counter as if the ball spawns means a turn has passed
-            self.textObject=OnscreenText(text="Turn:  "+str(self.turn)+"", pos=(-1, 0.90), scale=0.07) #creates the turn number text after the turn has played
-     
+
+            self.spawn_model(pos_tuple)
+            self.turn += 1
+            print(f"Turn incremented to: {self.turn}")
+            self.turn_text.setText(f"Turn: {self.turn}\nPress space and move the mouse to rotate\nLeft click to play\nRight click to change the center\nR to reset camera")
+        else:
+            print("No collision detected")
+
     def spawn_model(self, pos):
-        model = self.loader.loadModel("models\sphere.bam")
-        texture_file = "textures/black.png" if self.current_model_index == 0 else "textures/white.png"
-        model.setTexture(self.loader.loadTexture(texture_file), 1)
+        """Spawn a ball (black or white) at the given position and check for captures."""
+        model = self.loader.loadModel("models/sphere.bam")
+        texture = "textures/black.png" if self.current_color == 0 else "textures/white.png"
+        model.setTexture(self.loader.loadTexture(texture), 1)
         model.setScale(0.5)
         model.setPos(pos[0], pos[1], pos[2])
         model.reparentTo(self.render)
 
-        # Store the ball
-        pos_tuple = (int(round(pos[0])), int(round(pos[1])), int(round(pos[2])))
-        self.balls[pos_tuple] = {'node': model, 'color': self.current_model_index}
-        #print(f"Spawned {'black' if self.current_model_index == 0 else 'white'} ball at {pos_tuple}")debug
+        pos_tuple = tuple(int(round(coord)) for coord in pos)
+        self.balls[pos_tuple] = {'node': model, 'color': self.current_color}
+        self.current_color = 1 - self.current_color  # Switch between black (0) and white (1)
 
-        # Switch color
-        self.current_model_index = (self.current_model_index + 1) % 2
-
-        # Check all groups for liberties and capture any without liberties
         self.check_all_groups_for_captures()
 
     def check_all_groups_for_captures(self):
         """Check all groups on the board for liberties and capture any without liberties."""
-        #print("Checking all groups for captures...")debug
         visited = set()
-        positions = list(self.balls.keys())
-        
-        for pos in positions:
-            if pos in visited:
-                continue
-            
-            color = self.balls[pos]['color']
-            group = self.get_group(pos, color, visited.copy())
-            if group and not self.group_has_liberty(group):
-                #print(f"Capturing group with no liberties: {group}") #debug
-                self.remove_group(group)
-            visited.update(group)
+        for pos in list(self.balls.keys()):
+            if pos not in visited:
+                color = self.balls[pos]['color']
+                group = self.get_group(pos, color, visited.copy())
+                if group and not self.group_has_liberty(group):
+                    self.remove_group(group)
+                visited.update(group)
 
-app = GridDemo(5) #Set the size of the board
+    def get_adjacent_positions(self, pos):
+        """Return a list of adjacent positions within grid bounds."""
+        x, y, z = pos
+        adj = [
+            (x + 1, y, z), (x - 1, y, z),
+            (x, y + 1, z), (x, y - 1, z),
+            (x, y, z + 1), (x, y, z - 1)
+        ]
+        return [(ax, ay, az) for ax, ay, az in adj if 0 <= ax < self.size and 0 <= ay < self.size and 0 <= az < self.size]
+
+    def has_liberty(self, pos):
+        """Check if the position has at least one empty adjacent spot."""
+        return any(adj_pos not in self.balls for adj_pos in self.get_adjacent_positions(pos))
+
+    def get_group(self, pos, color, visited=None):
+        """Find all connected balls of the same color using DFS."""
+        if visited is None:
+            visited = set()
+        if pos not in self.balls or self.balls[pos]['color'] != color or pos in visited:
+            return set()
+        
+        group = set()
+        to_check = [pos]
+        while to_check:
+            current = to_check.pop()
+            if current in visited or current not in self.balls or self.balls[current]['color'] != color:
+                continue
+            visited.add(current)
+            group.add(current)
+            to_check.extend(self.get_adjacent_positions(current))
+        return group
+
+    def group_has_liberty(self, group):
+        """Check if a group of balls has at least one liberty (empty adjacent position)."""
+        return any(adj_pos not in self.balls and adj_pos not in group 
+                  for pos in group for adj_pos in self.get_adjacent_positions(pos))
+
+    def remove_group(self, group):
+        """Remove all balls in the group from the scene and tracking."""
+        for pos in group:
+            if pos in self.balls:
+                self.balls[pos]['node'].removeNode()
+                del self.balls[pos]
+                print(f"Despawned ball at {pos}")
+
+    def reset_camera(self):
+        """Reset the camera to the center of the grid."""
+        center = Point3((self.size - 1) / 2, (self.size - 1) / 2, (self.size - 1) / 2)
+        self.camera_control.center = center
+        self.camera_control.update_camera_position()
+
+    def change_camera_center(self):
+        """Change the camera center to the clicked collision sphere."""
+        if self.mouseWatcherNode.hasMouse():
+            mpos = self.mouseWatcherNode.getMouse()
+            self.pickerRay.setFromLens(self.camNode, mpos.getX(), mpos.getY())
+            self.cTrav.traverse(self.render)
+            if self.pickerQueue.getNumEntries() > 0:
+                self.pickerQueue.sortEntries()
+                hit = self.pickerQueue.getEntry(0)
+                vertex_node = hit.getIntoNodePath().getParent()
+                pos = vertex_node.getPos(self.render)
+                self.camera_control.center = pos
+                self.camera_control.update_camera_position()
+
+    def show_nothing(self):
+        """Hide all grid nodes and balls."""
+        for node in self.nodes:
+            node.setScale(0.0)
+        for ball_data in self.balls.values():
+            ball_data['node'].setScale(0.0)
+        print("Showing nothing now.")
+
+    def show_everything(self):
+        """Show all grid nodes and balls."""
+        for node in self.nodes:
+            node.setScale(1.0)
+        for ball_data in self.balls.values():
+            ball_data['node'].setScale(0.5)
+        print("Showing everything now.")
+        self.current_plane-=1 #Substrac 1 to the plane counter 
+        #so if you want to see a certain plane then see everything and then back to see the plane you were watching,
+        #  as the plance funtion always add 1 to he counter, in order to see the next one the next  time the player presses w, 
+        # by substracting 1 we can assure than the next time the player press w it will show the same plane just before looking at everything 
+
+    def show_one_floor(self, current_z=None):
+        """Show only one horizontal plane (z-level) and hide others, including balls, cycling through z-levels."""
+        if current_z is None:
+            # Cycle through z-levels (0 to size-1)
+            if not hasattr(self, 'current_plane'):
+                self.current_plane = 0  # Start with the bottom plane (z=0)
+            else:
+                self.current_plane = (self.current_plane + 1) % self.size  # Cycle to next plane
+            z = self.current_plane
+        else:
+            # Use the specified z-level (for testing or manual input)
+            z = current_z
+            if not (0 <= z < self.size):
+                print(f"Invalid z-level: {z}. Must be between 0 and {self.size-1}")
+                return
+
+        print(f"Showing horizontal plane at z = {z}")
+
+        # Show/hide grid nodes (CollisionSpheres)
+        for node in self.nodes:
+            # Extract coordinates from the node name (e.g., "vertex_x,y,z" -> split by "_" then ",")
+            name_parts = node.getName().split('_')
+            if len(name_parts) > 1:  # Ensure the name has the "vertex_" prefix
+                coords = name_parts[1].split(',')  # Get the coordinates part
+                x, y, z_pos = [float(coord) for coord in coords]  # Convert to floats
+                if int(z_pos) == z:
+                    node.setScale(1.0)  # Show nodes on this plane
+                else:
+                    node.setScale(0.0)  # Hide nodes on other planes
+            else:
+                print(f"Unexpected node name format: {node.getName()}")
+
+        # Show/hide balls (from self.balls)
+        for pos, ball_data in list(self.balls.items()):  # Use list() to avoid runtime changes
+            x, y, z_pos = pos
+            if z_pos == z:
+                ball_data['node'].setScale(0.5)  # Show balls on this plane (maintain original scale)
+            else:
+                ball_data['node'].setScale(0.0)  # Hide balls on other planes
+
+app = GridDemo(5)  # Set the size of the board
 app.run()
