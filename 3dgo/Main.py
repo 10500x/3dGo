@@ -4,23 +4,24 @@ from direct.gui.OnscreenText import OnscreenText
 from direct.gui.DirectGui import DirectEntry, DirectButton, DGG
 from camera import Camera
 from panda3d.core import loadPrcFile, Point3
-
 # Load configuration file
 loadPrcFile("config/conf.prc")
 
 class GridDemo(ShowBase):
     def __init__(self, size):
-        """Initialize the 3D Go game with a grid of specified size."""
         super().__init__()
-        self.size = size  # Grid size (e.g., 5 for 5x5x5)
+        self.initial_size = size  # Store the initial size for menu 
+        self.size = 1  # Start with a 1x1x1 grid to show only the black ball
         self.setBackgroundColor(0.0, 0.75, 0.75)  # Set turquoise background
-
-        # Set up collision system for mouse picking (from Panda3D documentation)
+        self.ball_model = self.loader.loadModel("smiley")  # Preload model
+        self.black_texture = self.loader.loadTexture("textures/black.png") #Preload textures
+        self.white_texture = self.loader.loadTexture("textures/white.png")
+        # Set up collision system for mouse picking
         self.setup_collision_system()
 
         # Disable default mouse control and initialize custom camera
         self.disableMouse()
-        self.camera_control = Camera(self, size)
+        self.camera_control = Camera(self, self.initial_size)  # Use initial size for camera positioning
 
         # Bind keyboard and mouse inputs
         self.bind_inputs()
@@ -28,18 +29,20 @@ class GridDemo(ShowBase):
         # Initialize game state
         self.vertices = []  # List of vertex positions (x, y, z)
         self.edges = []     # List of edges connecting vertices
+        self.nodes = []     # List to store grid node paths
         self.balls = {}     # Dictionary to track placed balls: (x, y, z) -> {'node': NodePath, 'color': int}
         self.current_color = 0  # 0 = black, 1 = white
         self.turn = 1       # Start with turn 1
+        self.current_plane = 0  # Track current plane for horizontal plane visibility
 
         # Place initial black ball at (0, 0, 0)
         self.place_initial_ball()
 
-        # Generate the 3D grid with collision spheres
-        self.generate_grid()
-
-        # Set up GUI for coordinate input and turn display
+        # Set up GUI for coordinate input, turn display, and grid size input
         self.setup_gui()
+
+        # Generate the initial 1x1x1 grid for the menu
+        self.generate_grid(1)
 
     def setup_collision_system(self):
         """Configure the collision system for mouse picking."""
@@ -71,17 +74,37 @@ class GridDemo(ShowBase):
         self.accept("w", self.show_one_floor, [None])  # Show next horizontal plane
         self.accept("s", self.show_everything)  # Show all planes
 
-    def place_initial_ball(self):
-        """Place a black ball at (0, 0, 0) as the starting piece."""
+    def place_initial_ball(self): #place a black ball to represent the 0,0,0
         initial_ball = self.loader.loadModel("smiley")
         initial_ball.setPos(0, 0, 0)
         initial_ball.setTexture(self.loader.loadTexture("textures/black.png"), 1)
         initial_ball.setScale(0.11)
         initial_ball.reparentTo(self.render)
 
-    def generate_grid(self):
-        """Generate the 3D grid with collision spheres and edges."""
-        self.nodes = []  # List to store grid node paths
+    def generate_grid(self, size):
+        size = int(size)  # Ensure size is an integer
+        self.size = size  # Update grid size
+
+        # Remove all existing balls (nodes and data)
+        for ball_data in list(self.balls.values()):  # Use list() to avoid runtime changes
+            ball_data['node'].removeNode()
+        self.balls.clear()  # Clear the balls dictionary
+
+        # Remove all existing nodes, including their collision nodes
+        for node in self.nodes:
+            if not node.is_empty():  # Check if node still exists
+                # Remove the collision node attached to this vertex node
+                collision_node = node.find("**/+CollisionNode")
+                if collision_node:
+                    collision_node.removeNode()
+                node.removeNode()
+        
+        # Clear lists to ensure no references remain
+        self.nodes = []
+        self.edges = []
+        self.vertices = []
+
+        # Generate new grid
         for x in range(self.size):
             for y in range(self.size):
                 for z in range(self.size):
@@ -110,15 +133,35 @@ class GridDemo(ShowBase):
                     self.vertices.append((x, y, z))
                     self.nodes.append(vertex_node)
 
-    def setup_gui(self):
-        """Set up GUI elements for coordinate input and turn display."""
+        # Place initial black ball at (0, 0, 0) for the new grid
+        self.place_initial_ball()
+        self.reset_camera()  # Adjust camera to the new grid center
+
+    def set_grid_size(self, input_text=None): #set the grid size to the user input
+        text = self.size_entry.get() if input_text is None else str(input_text)
+        try:
+            new_size = int(text.strip())  # Convert the text to an integer, stripping whitespace
+            self.size = new_size
+            self.generate_grid(new_size)  # Regenerate grid with new size
+            self.turn = 1  # Reset turn for new grid
+            self.balls.clear()  # Clear existing balls (already handled in generate_grid, but ensure consistency)
+            self.place_initial_ball()  # Place new initial ball
+            self.turn_text.setText(f"Turn: {self.turn}\nPress space and move the mouse to rotate\nLeft click to play\nRight click to change the center\nR to reset camera\nW to move between planes\nS to see the whole grid.")
+            self.size_entry["focus"] = 0  # Clear focus after submission
+            #print(f"Grid size set to {new_size}x{new_size}x{new_size}")
+        except ValueError:
+            print("Invalid input: Please enter a numeric grid size (e.g., 5)")
+        except Exception as e:
+            print(f"Error setting grid size: {e}")
+
+    def setup_gui(self):#GUI
         # Display turn and instructions
         self.turn_text = OnscreenText(
             text=f"Turn: {self.turn}\nPress space and move the mouse to rotate\nLeft click to play\nRight click to change the center\nR to reset camera\nW to move between planes\nS to see the whole grid.",
             pos=(-1.9, 0.90), scale=0.07, align=TextNode.ALeft
         )
 
-        # Instruction for coordinate input
+        # Instructions for coordinate input
         self.coord_label = OnscreenText(
             text="Enter x,y,z", pos=(-1.9, -0.90), scale=0.07, align=TextNode.ALeft
         )
@@ -138,8 +181,21 @@ class GridDemo(ShowBase):
             pos=(-1, 0, -0.9), frameColor=(0, 1, 0, 0.5), text_fg=(1, 1, 1, 1)
         )
 
+        # Instructions for grid size input
+        self.size_label = OnscreenText(
+            text="Enter the grid size", pos=(-1.9, -0.80), scale=0.07, align=TextNode.ALeft
+        )
+
+        # Create entry field for grid size input
+        self.size_entry = DirectEntry(
+            text="", scale=0.05, command=self.set_grid_size,
+            initialText="", numLines=1, focus=0,
+            pos=(-1.3, 0, -0.8), frameColor=(0, 0, 0, 0.5),
+            text_fg=(1, 1, 1, 1), width=3
+        )
+        self.size_entry.bind(DGG.ENTER, self.set_grid_size)
+
     def process_coordinates(self, input_text=None):
-        """Process player-entered coordinates and make a move."""
         text = self.coord_entry.get() if input_text is None else input_text
         try:
             coords = [int(x.strip()) for x in text.split(',')]
@@ -170,7 +226,6 @@ class GridDemo(ShowBase):
             print(f"Error processing coordinates: {e}")
 
     def check_click(self):
-        """Handle left-click to place a piece on a collision sphere."""
         if not self.mouseWatcherNode.hasMouse():
             print("No mouse input detected")
             return
@@ -202,10 +257,9 @@ class GridDemo(ShowBase):
             print("No collision detected")
 
     def spawn_model(self, pos):
-        """Spawn a ball (black or white) at the given position and check for captures."""
-        model = self.loader.loadModel("models/sphere.bam")
-        texture = "textures/black.png" if self.current_color == 0 else "textures/white.png"
-        model.setTexture(self.loader.loadTexture(texture), 1)
+        model = self.ball_model.copyTo(self.render)
+        texture = self.black_texture if self.current_color == 0 else self.white_texture
+        model.setTexture(texture, 1)
         model.setScale(0.5)
         model.setPos(pos[0], pos[1], pos[2])
         model.reparentTo(self.render)
@@ -217,7 +271,7 @@ class GridDemo(ShowBase):
         self.check_all_groups_for_captures()
 
     def check_all_groups_for_captures(self):
-        """Check all groups on the board for liberties and capture any without liberties."""
+
         visited = set()
         for pos in list(self.balls.keys()):
             if pos not in visited:
@@ -227,8 +281,7 @@ class GridDemo(ShowBase):
                     self.remove_group(group)
                 visited.update(group)
 
-    def get_adjacent_positions(self, pos):
-        """Return a list of adjacent positions within grid bounds."""
+    def get_adjacent_positions(self, pos): #Return a list of adjacent positions within grid bounds
         x, y, z = pos
         adj = [
             (x + 1, y, z), (x - 1, y, z),
@@ -237,12 +290,10 @@ class GridDemo(ShowBase):
         ]
         return [(ax, ay, az) for ax, ay, az in adj if 0 <= ax < self.size and 0 <= ay < self.size and 0 <= az < self.size]
 
-    def has_liberty(self, pos):
-        """Check if the position has at least one empty adjacent spot."""
+    def has_liberty(self, pos):#Check if the position has at least one empty adjacent spot.
         return any(adj_pos not in self.balls for adj_pos in self.get_adjacent_positions(pos))
 
-    def get_group(self, pos, color, visited=None):
-        """Find all connected balls of the same color using DFS."""
+    def get_group(self, pos, color, visited=None):#Find all connected balls of the same color using DFS.
         if visited is None:
             visited = set()
         if pos not in self.balls or self.balls[pos]['color'] != color or pos in visited:
@@ -259,27 +310,23 @@ class GridDemo(ShowBase):
             to_check.extend(self.get_adjacent_positions(current))
         return group
 
-    def group_has_liberty(self, group):
-        """Check if a group of balls has at least one liberty (empty adjacent position)."""
+    def group_has_liberty(self, group):#Check if a group of balls has at least one liberty (empty adjacent position).
         return any(adj_pos not in self.balls and adj_pos not in group 
                   for pos in group for adj_pos in self.get_adjacent_positions(pos))
 
-    def remove_group(self, group):
-        """Remove all balls in the group from the scene and tracking."""
+    def remove_group(self, group):#Remove all balls in the group from the scene and tracking
         for pos in group:
             if pos in self.balls:
                 self.balls[pos]['node'].removeNode()
                 del self.balls[pos]
                 print(f"Despawned ball at {pos}")
 
-    def reset_camera(self):
-        """Reset the camera to the center of the grid."""
+    def reset_camera(self):#Reset the camera to the center of the grid.
         center = Point3((self.size - 1) / 2, (self.size - 1) / 2, (self.size - 1) / 2)
         self.camera_control.center = center
         self.camera_control.update_camera_position()
 
-    def change_camera_center(self):
-        """Change the camera center to the clicked collision sphere."""
+    def change_camera_center(self):#Change the camera center to the clicked collision sphere.
         if self.mouseWatcherNode.hasMouse():
             mpos = self.mouseWatcherNode.getMouse()
             self.pickerRay.setFromLens(self.camNode, mpos.getX(), mpos.getY())
@@ -292,28 +339,29 @@ class GridDemo(ShowBase):
                 self.camera_control.center = pos
                 self.camera_control.update_camera_position()
 
-    def show_nothing(self):
-        """Hide all grid nodes and balls."""
+    def show_nothing(self):#Hide all grid nodes and balls.
+       
         for node in self.nodes:
             node.setScale(0.0)
         for ball_data in self.balls.values():
             ball_data['node'].setScale(0.0)
-        print("Showing nothing now.")
+        #print("Showing nothing now.")
 
-    def show_everything(self):
-        """Show all grid nodes and balls."""
+    def show_everything(self):#Show all grid nodes and balls.
+        if (self.size==1):
+            return
+        
         for node in self.nodes:
             node.setScale(1.0)
         for ball_data in self.balls.values():
             ball_data['node'].setScale(0.5)
-        print("Showing everything now.")
+        #print("Showing everything now.")
         self.current_plane-=1 #Substrac 1 to the plane counter 
         #so if you want to see a certain plane then see everything and then back to see the plane you were watching,
-        #  as the plance funtion always add 1 to he counter, in order to see the next one the next  time the player presses w, 
+        #  as the plane funtion always add 1 to the counter, in order to see the next one the next time, 
         # by substracting 1 we can assure than the next time the player press w it will show the same plane just before looking at everything 
 
-    def show_one_floor(self, current_z=None):
-        """Show only one horizontal plane (z-level) and hide others, including balls, cycling through z-levels."""
+    def show_one_floor(self, current_z=None):#Show only one horizontal plane (z-level).
         if current_z is None:
             # Cycle through z-levels (0 to size-1)
             if not hasattr(self, 'current_plane'):
@@ -325,10 +373,10 @@ class GridDemo(ShowBase):
             # Use the specified z-level (for testing or manual input)
             z = current_z
             if not (0 <= z < self.size):
-                print(f"Invalid z-level: {z}. Must be between 0 and {self.size-1}")
+                #print(f"Invalid z-level: {z}. Must be between 0 and {self.size-1}")
                 return
 
-        print(f"Showing horizontal plane at z = {z}")
+        #print(f"Showing horizontal plane at z = {z}")
 
         # Show/hide grid nodes (CollisionSpheres)
         for node in self.nodes:
@@ -336,21 +384,22 @@ class GridDemo(ShowBase):
             name_parts = node.getName().split('_')
             if len(name_parts) > 1:  # Ensure the name has the "vertex_" prefix
                 coords = name_parts[1].split(',')  # Get the coordinates part
-                x, y, z_pos = [float(coord) for coord in coords]  # Convert to floats
+                x,y, z_pos = [float(coord) for coord in coords]  # Convert to floats
                 if int(z_pos) == z:
                     node.setScale(1.0)  # Show nodes on this plane
                 else:
                     node.setScale(0.0)  # Hide nodes on other planes
             else:
-                print(f"Unexpected node name format: {node.getName()}")
+                #print(f"Unexpected node name format: {node.getName()}")
+                continue
 
         # Show/hide balls (from self.balls)
         for pos, ball_data in list(self.balls.items()):  # Use list() to avoid runtime changes
-            x, y, z_pos = pos
+            x,y,z_pos = pos
             if z_pos == z:
                 ball_data['node'].setScale(0.5)  # Show balls on this plane (maintain original scale)
             else:
                 ball_data['node'].setScale(0.0)  # Hide balls on other planes
 
-app = GridDemo(5)  # Set the size of the board
+app = GridDemo(1)  # Set the size of the board
 app.run()
