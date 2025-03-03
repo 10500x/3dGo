@@ -27,6 +27,8 @@ class GridDemo(ShowBase):
         self.bind_inputs()
 
         # Initialize game state
+        self.black_points=0 #set both players points to cero, the komi would be added(asked) later
+        self.white_points=0
         self.vertices = []  # List of vertex positions (x, y, z)
         self.edges = []     # List of edges connecting vertices
         self.nodes = []     # List to store grid node paths
@@ -43,6 +45,38 @@ class GridDemo(ShowBase):
 
         # Generate the initial 1x1x1 grid for the menu
         self.generate_grid(1)
+
+    def points(self):#Funtion that counts the points of the player by searching for the empty spaces that are fully sorrunded by a color
+        nocolor=[]#set of balls that has no color
+        self.black_points=0 #set to cero so it always counts the points at that turn
+        self.white_points=0
+        for n in self.vertices: #look in every vertex, if the position of such vertex has a ball attached then, do nothing. If such vextex has no ball, then goes into the nocolor set.
+            x,y,z = n
+            if (n==(x,y,z) and (not((x,y,z) in self.balls))):
+                nocolor.append(n)
+        # Check each empty vertex to see if it’s surrounded by one color. Ideallly this should be a BFS and not this but it works...
+        for pos in nocolor:
+                adj_positions = self.get_adjacent_positions(pos)
+                adjacent_colors = set()  # Track unique colors around the empty space
+
+                # Get colors of adjacent balls (if any)
+                for adj_pos in adj_positions:
+                    if adj_pos in self.balls:
+                        adjacent_colors.add(self.balls[adj_pos]['color'])
+
+                # If all adjacent positions have balls of the same color, count the point
+                if len(adjacent_colors) == 1:  # Only one color surrounds the empty space
+                    color = next(iter(adjacent_colors))  # Get the color (0 or 1)
+                    if color == 0:  # Black
+                        self.black_points += 1
+                    else:  # White
+                        self.white_points += 1
+                # If there are no adjacent balls or mixed colors, no points are awarded for this space
+            # Return the points
+        self.text_points.setText(f"Black points: {self.black_points}\nWhite points: {self.white_points}")#Change the points on screen.
+        #return self.black_points, self.white_points  #
+
+        
 
     def setup_collision_system(self):
         """Configure the collision system for mouse picking."""
@@ -66,6 +100,7 @@ class GridDemo(ShowBase):
         self.accept("arrow_right", self.camera_control.rotate_right)
         self.accept("arrow_up", self.camera_control.rotate_up)
         self.accept("arrow_down", self.camera_control.rotate_down)
+        self.accept("p", self.points)
 
         # Game controls
         self.accept("mouse1", self.check_click)  # Left click to place pieces
@@ -136,6 +171,7 @@ class GridDemo(ShowBase):
         # Place initial black ball at (0, 0, 0) for the new grid
         self.place_initial_ball()
         self.reset_camera()  # Adjust camera to the new grid center
+        #print(self.vertices) #debug
 
     def set_grid_size(self, input_text=None): #set the grid size to the user input
         text = self.size_entry.get() if input_text is None else str(input_text)
@@ -146,7 +182,7 @@ class GridDemo(ShowBase):
             self.turn = 1  # Reset turn for new grid
             self.balls.clear()  # Clear existing balls (already handled in generate_grid, but ensure consistency)
             self.place_initial_ball()  # Place new initial ball
-            self.turn_text.setText(f"Turn: {self.turn}\nPress space and move the mouse to rotate\nLeft click to play\nRight click to change the center\nR to reset camera\nW to move between planes\nS to see the whole grid.")
+            self.turn_text.setText(f"Turn: {self.turn}\n")
             self.size_entry["focus"] = 0  # Clear focus after submission
             #print(f"Grid size set to {new_size}x{new_size}x{new_size}")
         except ValueError:
@@ -157,11 +193,18 @@ class GridDemo(ShowBase):
     def setup_gui(self):#GUI
         # Display turn and instructions
         self.turn_text = OnscreenText(
-            text=f"Turn: {self.turn}\nPress space and move the mouse to rotate\nLeft click to play\nRight click to change the center\nR to reset camera\nW to move between planes\nS to see the whole grid.",
+            text=f"Turn: {self.turn}\n",
             pos=(-1.9, 0.90), scale=0.07, align=TextNode.ALeft
         )
-
-        # Instructions for coordinate input
+        self.hotkeys = OnscreenText(
+            text="Press space and move the mouse to rotate\nLeft click to play\nRight click to change the center\nR to reset camera\nW to move between planes\nS to see the whole grid\n",
+            pos=(-1.9, 0.80), scale=0.07, align=TextNode.ALeft
+        )
+        self.text_points = OnscreenText(
+            text=f"Black points: {self.black_points}\nWhite points: {self.white_points}",
+            pos=(-1.9, 0.40), scale=0.07, align=TextNode.ALeft
+        )
+        # Instructions for coordinate input 
         self.coord_label = OnscreenText(
             text="Enter x,y,z", pos=(-1.9, -0.90), scale=0.07, align=TextNode.ALeft
         )
@@ -200,23 +243,23 @@ class GridDemo(ShowBase):
         try:
             coords = [int(x.strip()) for x in text.split(',')]
             if len(coords) != 3:
-                print("Invalid input: Please enter three numbers separated by commas (e.g., 0,0,0)")
+                #print("Invalid input: Please enter three numbers separated by commas (e.g., 0,0,0)")
                 return
             x, y, z = coords
 
             if not (0 <= x < self.size and 0 <= y < self.size and 0 <= z < self.size):
-                print(f"Coordinates {x},{y},{z} are outside the grid bounds ({self.size}x{self.size}x{self.size})")
+                #print(f"Coordinates {x},{y},{z} are outside the grid bounds ({self.size}x{self.size}x{self.size})")
                 return
 
             pos = (x, y, z)
             if pos in self.balls:
-                print(f"Position {pos} already occupied")
+                #print(f"Position {pos} already occupied")
                 return
 
             self.spawn_model(pos)
             self.turn += 1
-            print(f"Turn incremented to: {self.turn}")
-            self.turn_text.setText(f"Turn: {self.turn}\nPress space and move the mouse to rotate\nLeft click to play\nRight click to change the center\nR to reset camera")
+            #print(f"Turn incremented to: {self.turn}")
+            self.turn_text.setText(f"Turn: {self.turn}")
             self.coord_entry["focus"] = 0  # Clear focus after submission
             print("Entry field focus cleared after submission")
 
@@ -252,7 +295,7 @@ class GridDemo(ShowBase):
             self.spawn_model(pos_tuple)
             self.turn += 1
             print(f"Turn incremented to: {self.turn}")
-            self.turn_text.setText(f"Turn: {self.turn}\nPress space and move the mouse to rotate\nLeft click to play\nRight click to change the center\nR to reset camera")
+            self.turn_text.setText(f"Turn: {self.turn}")
         else:
             print("No collision detected")
 
