@@ -54,21 +54,15 @@ class Point():
 
     
 
-Points_matrix = [[[],[],[],[],[],[],[],[],[]],
-                 [[],[],[],[],[],[],[],[],[]],
-                 [[],[],[],[],[],[],[],[],[]],
-                 [[],[],[],[],[],[],[],[],[]],
-                 [[],[],[],[],[],[],[],[],[]],
-                 [[],[],[],[],[],[],[],[],[]],
-                 [[],[],[],[],[],[],[],[],[]],
-                 [[],[],[],[],[],[],[],[],[]],
-                 [[],[],[],[],[],[],[],[],[]],] # matrix where the points are stored 
+Points_matrix = [] 
 
 
 # asigning neighbors manualy-----------------------------
 
 for i in range(N):
+    Points_matrix.append([])
     for j in range(N):
+        Points_matrix[i].append([])
         Points_matrix[i][j] = Point([i,j])
 
 for i in range(1,N-1):
@@ -105,17 +99,14 @@ Points_matrix[0][0].neighbors.add(Points_matrix[0][1])
 Points_matrix[0][0].neighbors.add(Points_matrix[1][0])
 Points_matrix[0][0].neighbors.add(Points_matrix[-1][0])
 Points_matrix[0][0].neighbors.add(Points_matrix[0][-1])
-Points_matrix[0][0].neighbors.add(Points_matrix[-1][-1])
 
 Points_matrix[-1][0].neighbors.add(Points_matrix[-2][0])
 Points_matrix[-1][0].neighbors.add(Points_matrix[-1][1])
 Points_matrix[-1][0].neighbors.add(Points_matrix[0][0])
-Points_matrix[-1][0].neighbors.add(Points_matrix[0][-1])
 Points_matrix[-1][0].neighbors.add(Points_matrix[-1][-1])
 
 Points_matrix[0][-1].neighbors.add(Points_matrix[0][-2])
 Points_matrix[0][-1].neighbors.add(Points_matrix[1][-1])
-Points_matrix[0][-1].neighbors.add(Points_matrix[-1][0])
 Points_matrix[0][-1].neighbors.add(Points_matrix[0][0])
 Points_matrix[0][-1].neighbors.add(Points_matrix[-1][-1])
 
@@ -123,7 +114,6 @@ Points_matrix[-1][-1].neighbors.add(Points_matrix[-2][-1])
 Points_matrix[-1][-1].neighbors.add(Points_matrix[-1][-2])
 Points_matrix[-1][-1].neighbors.add(Points_matrix[-1][0])
 Points_matrix[-1][-1].neighbors.add(Points_matrix[0][-1])
-Points_matrix[-1][-1].neighbors.add(Points_matrix[0][0])
 
 
 # canvas board info
@@ -250,7 +240,56 @@ play = tk.Button(root, text='Play', height=2, width=10, pady = 5,command = updat
 play.pack()
 '''
 
+def region_search(point,region = set(),col_border = set()):
+    if point.status == 'empty':
+        region.add(point)
+        #print(point.coordinates,' added')
+        for n in (point.neighbors-region):
+            region_search(n,region,col_border)
+    else:
+        col_border.add(point.status)
+        #print(point.status, 'color added')
+    return region, col_border
+
+
+
+def count_points(event):
+    black_points = 0
+    white_points = 0
+    visited = set()
+
+    for i in range(N):
+        for j in range(N):
+            actual  = Points_matrix[i][j]
+            if actual.status == 'empty' and actual not in visited:
+                region = set()
+                col_border = set()
+                region, col_border = region_search(actual, region, col_border)
+
+                for k in region:
+                    visited.add(k)
+
+                #print(actual.coordinates)
+                #print(len(region))
+                #print(col_border)
+
+                if len(col_border) == 1:
+                    if 'black' in col_border:
+                        black_points += len(region)
+                    else:
+                        white_points += len(region)
+                
+
+            elif actual.status == 'black':
+                black_points += 1
+            elif actual.status == 'white':
+                white_points += 1
+
+    print('\n Black : '+str(black_points)+'\n')
+    print('White : '+str(white_points)+'\n')
+
 root.bind('<space>',update)
 canvas.bind('<Button-1>', place_stone)
+root.bind('<f>',count_points)
 
 root.mainloop()

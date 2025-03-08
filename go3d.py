@@ -405,6 +405,58 @@ play = tk.Button(inner_frame, text='Play', height=2, width=10, pady = 5,command 
 play.grid(row = 1, column = 4)
 '''
 
+
+def region_search(point,region = set(),col_border = set()):
+    if point.status == 'empty':
+        region.add(point)
+        #print(point.coordinates,' added')
+        for n in (point.neighbors-region):
+            region_search(n,region,col_border)
+    else:
+        col_border.add(point.status)
+        #print(point.status, 'color added')
+    return region, col_border
+
+
+
+def count_points(event):
+    black_points = 0
+    white_points = 0
+    visited = set()
+
+    for i in range(N):
+        for j in range(N):
+            for k in range(N):
+                actual  = Points_matrix[i][j][k]
+                if actual.status == 'empty' and actual not in visited:
+                    region = set()
+                    col_border = set()
+                    region, col_border = region_search(actual, region, col_border)
+
+                    for v in region:
+                        visited.add(v)
+
+                    print(actual.coordinates)
+                    print(len(region))
+                    print(col_border)
+
+                    if len(col_border) == 1:
+                        if 'black' in col_border:
+                            black_points += len(region)
+                        else:
+                            white_points += len(region)
+                    
+
+                elif actual.status == 'black':
+                    black_points += 1
+                elif actual.status == 'white':
+                    white_points += 1
+
+    print('\n Black : '+str(black_points)+'\n')
+    print('White : '+str(white_points)+'\n')
+
+
+
 root.bind('<space>',update)
 
 
@@ -414,7 +466,8 @@ for T in tableros:
 def update_scroll_region(event):
     main_canvas.configure(scrollregion = main_canvas.bbox("all"))
 
-inner_frame.bind("<Configure>", update_scroll_region)
+root.bind('<f>',count_points)
 
+inner_frame.bind("<Configure>", update_scroll_region)
 
 root.mainloop()
