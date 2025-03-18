@@ -2,7 +2,7 @@ load-display pandagl
 window-size 1360 768
 window-title 3D-Go
 sync-video 0
-show-frame-rate-meter 1
+show-frame-rate-meter 0
 trackball-coords 0
 threading-model Cull/Draw
 hardware-animated-vertices 1
