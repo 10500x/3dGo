@@ -2,7 +2,7 @@ from panda3d.core import NodePath, CollisionNode, CollisionSphere, CollisionTrav
 from panda3d.core import AntialiasAttrib
 from direct.showbase.ShowBase import ShowBase
 from direct.gui.OnscreenText import OnscreenText
-from direct.gui.DirectGui import DirectEntry, DirectButton, DGG, DirectOptionMenu
+from direct.gui.DirectGui import DirectEntry, DGG, DirectOptionMenu
 from panda3d.core import ClockObject
 from panda3d.core import Material
 from camera import Camera
@@ -18,9 +18,12 @@ class GridDemo(ShowBase):
         self.render.setAntialias(AntialiasAttrib.MLine) #Antialias just for the grid
         self.custom_font = self.loader.loadFont("fonts/Montserrat-Regular.ttf")
         self.initial_size = size
-        self.size = 1
+        self.size = "0,0,0" #Initialize the default size value as 0,0,0, same to every cord.
+        self.x_size =1
+        self.y_size =1
+        self.z_size =1
         self.extra_gui_elements = {}
-        self.background_color=(0.75, 0.75, 0.75)#default background color
+        self.background_color=(0.5, 0.5, 0.5)#default background color
         self.setBackgroundColor(self.background_color) #Background color
         self.ball_model = self.loader.loadModel("models/sphere.bam")    #Preload of model and texture for stones
         self.black_texture = self.loader.loadTexture("textures/black.png")
@@ -133,11 +136,13 @@ class GridDemo(ShowBase):
         self.accept("z", self.pass_turn)  # Bind 'z' key to pass
         self.accept("mouse1", self.check_click)  # Left click to place pieces
         self.accept("mouse3", self.change_camera_center)  # Right click to center camera
-        self.accept("r", self.reset_camera)  # Reset camera to grid center
+        self.accept("r", self.call_reset_camera)  # Reset camera to grid center
         self.accept("q", self.plane_down)  # Show next horizontal plane 0 for going down, 1 to up.
         self.accept("e", self.plane_up)  # Show past horizontal plane
         self.accept("w", self.show_everything)  # Show all planes
 
+    def call_reset_camera(self):
+        self.reset_camera(self.size)
     def place_initial_ball(self): #place a black ball to represent the 0,0,0
         initial_ball = self.loader.loadModel("smiley")
         initial_ball.setPos(0, 0, 0)
@@ -172,9 +177,6 @@ class GridDemo(ShowBase):
 
 
     def points(self):
-        print(self.black_captures)
-        print("")
-        print(self.white_captures)
         self.black_points = self.black_captures + self.calculate_territory(0)
         self.white_points = self.white_captures + self.calculate_territory(1) + self.komi  # Komi of 6.5
         self.text_points.setText(text=f"Black points: {self.black_points}\nWhite points: {self.white_points}")
@@ -202,9 +204,9 @@ class GridDemo(ShowBase):
     def calculate_territory(self, color):
         territory = 0
         visited = set()
-        for x in range(self.size):
-            for y in range(self.size):
-                for z in range(self.size):
+        for x in range(self.x_size):
+            for y in range(self.y_size):
+                for z in range(self.z_size):
                     pos = (x, y, z)
                     if pos not in self.balls and pos not in visited:# flood-fill to check if surrounded by one color
                         region = self.get_region(pos, visited)
@@ -222,7 +224,7 @@ class GridDemo(ShowBase):
         return territory
     
     def get_region(self, pos, visited):#Flood-fill to find a connected empty region.
-        if pos in self.balls or pos in visited or not (0 <= pos[0] < self.size and 0 <= pos[1] < self.size and 0 <= pos[2] < self.size):
+        if pos in self.balls or pos in visited or not (0 <= pos[0] < self.x_size and 0 <= pos[1] < self.y_size and 0 <= pos[2] < self.z_size):
             return set()
         region = set()
         to_check = [pos]
@@ -237,9 +239,10 @@ class GridDemo(ShowBase):
         return region
 
     def generate_grid(self, size):
-        size = int(size)
-        self.size = size
-
+        size = [int(x.strip()) for x in size.split(',')]
+        if len(size) != 3:
+            return
+        self.x_size, self.y_size, self.z_size = size
         # Clear existing balls
         for ball_data in list(self.balls.values()):
             ball_data['node'].removeNode()
@@ -263,50 +266,52 @@ class GridDemo(ShowBase):
         self.vertices = []
         
         # Generate vertices and collision nodes
-        for x in range(self.size):
-            for y in range(self.size):
-                for z in range(self.size):
+        for x in range(self.x_size):
+            for y in range(self.y_size):
+                for z in range(self.z_size):
                     vertex_node = NodePath(f"vertex_{x},{y},{z}")
                     vertex_node.setPos(x, y, z)
                     vertex_node.reparentTo(self.render)
-                    collision_sphere = CollisionSphere(0, 0, 0, 0.15)
+                    collision_sphere = CollisionSphere(0, 0, 0, 0.25)
                     collision_node = vertex_node.attachNewNode(CollisionNode(f'cnode_{x}{y}{z}'))
                     collision_node.node().addSolid(collision_sphere)
                     collision_node.node().setIntoCollideMask(1)
                     collision_node.setColor(0.5, 0.5, 0.5, 1)
                     #collision_node.show() #only for debug purpose, show the collison_nodes. Bad performance althougt I like how it looks. 
-                    if x + 1 < self.size:
+                    if x + 1 < self.x_size:
                         self.edges.append(((x, y, z), (x + 1, y, z)))
-                    if y + 1 < self.size:
+                    if y + 1 < self.y_size:
                         self.edges.append(((x, y, z), (x, y + 1, z)))
-                    if z + 1 < self.size:
+                    if z + 1 < self.z_size:
                         self.edges.append(((x, y, z), (x, y, z + 1)))
                     self.vertices.append((x, y, z))
                     self.nodes.append(vertex_node)
-        # Generate line grids for each z-level
-        for z in range(self.size):
+        for z in range(self.z_size):
+            # Create a single LineSegs object for this z layer
             lines = LineSegs()
             lines.setThickness(1)  # Set line thickness
-            
+            lines.setColor(1, 1, 1, 1)  # Set color to white
 
             # Draw horizontal lines (along x-axis) for each y
-            for y in range(self.size):
+            for y in range(self.y_size):
                 lines.moveTo(0, y, z)
-                lines.drawTo(self.size - 1, y, z)
+                lines.drawTo(self.x_size - 1, y, z)
 
             # Draw vertical lines (along y-axis) for each x
-            for x in range(self.size):
+            for x in range(self.x_size):
                 lines.moveTo(x, 0, z)
-                lines.drawTo(x, self.size - 1, z)
+                lines.drawTo(x, self.y_size - 1, z)
 
             # Create a NodePath for the lines and add to render
             line_node = self.render.attachNewNode(lines.create())
             self.line_nodes.append(line_node)
+        self.game_over_text.destroy()  
+        self.reset_camera(self.size)
+        self.place_initial_ball
         self.custom_grid_color(self.grid_color)
-        self.place_initial_ball()
-        self.game_over_text.destroy()
-        self.reset_camera()
-
+        
+        
+        
     def custom_background_color(self, event=None):
         if self.extra_show == 1 and "background_entry" in self.extra_gui_elements:
             text = self.extra_gui_elements["background_entry"].get()
@@ -349,13 +354,11 @@ class GridDemo(ShowBase):
         try:
             color = [int(x.strip()) for x in text.split(',')]
             if len(color) != 3:
-             
                 return
             r, g, b = color
             
             r, g, b = r / 255.0, g / 255.0, b / 255.0
             if not all(0 <= c <= 1 for c in (r, g, b)):
-            
                 return
 
             for line_node in self.line_nodes:
@@ -364,23 +367,21 @@ class GridDemo(ShowBase):
 
             self.grid_color = (r, g, b)
 
-            for z in range(self.size):
+            for z in range(self.z_size):  
                 lines = LineSegs()
                 lines.setThickness(1)
                 lines.setColor(r, g, b, 1)
-                for y in range(self.size):
+                for y in range(self.y_size):  
                     lines.moveTo(0, y, z)
-                    lines.drawTo(self.size - 1, y, z)
-                for x in range(self.size):
+                    lines.drawTo(self.x_size - 1, y, z)  
+                for x in range(self.x_size):  
                     lines.moveTo(x, 0, z)
-                    lines.drawTo(x, self.size - 1, z)
+                    lines.drawTo(x, self.y_size - 1, z)  
                 line_node = self.render.attachNewNode(lines.create())
                 self.line_nodes.append(line_node)
 
-         
         except ValueError:
             return
-         
         except Exception as e:
             return
        
@@ -390,9 +391,8 @@ class GridDemo(ShowBase):
         text = self.size_entry.get() if input_text is None else str(input_text)
         try:
             self.reset_game()
-            new_size = int(text.strip())  # Convert the text to an integer, stripping whitespace
-            self.size = new_size
-            self.generate_grid(new_size)  # Regenerate grid with new size
+            self.size = text
+            self.generate_grid(self.size)  # Regenerate grid with new size
             self.turn = 1  # Reset turn for new grid
             self.balls.clear()  # Clear existing balls (already in generate_grid, but ensure consistency)
             self.place_initial_ball()  # Place new initial ball
@@ -533,9 +533,9 @@ class GridDemo(ShowBase):
     ##### Instructions for coordinate input #####
         self.coord_label = OnscreenText(
             text="Enter x,y,z",
-            pos=(-1.9,-0.90),
+            pos=(-0.2,-0.90),
             scale=0.07,
-            align=TextNode.ALeft,
+            align=TextNode.ACenter,
             font= self.custom_font
         )
         self.coord_entry = DirectEntry( # Create entry field for coordinate input
@@ -545,39 +545,34 @@ class GridDemo(ShowBase):
             initialText="",
             numLines=1, 
             focus=0,
-            pos=(-1.5, 0, -0.9),
+            pos=(0, 0, -0.9),
             frameColor=(0, 0, 0, 0.5),
             text_fg=(1, 1, 1, 1), width=3
         )
         self.coord_entry.bind(DGG.ENTER, self.process_coordinates)
         # Create button to submit coordinates
-        self.submit_button_move = DirectButton( 
-        text="Submit move",
-        scale=0.05,
-        command=self.process_coordinates,
-        pos=(-1.15,0, -0.9),
-        frameColor=(0, 1, 0, 0.5),
-        text_fg=(1, 1, 1, 1)
-        )
+       # self.submit_button_move = DirectButton( 
+        #text="Submit move",
+        #scale=0.05,
+       # command=self.process_coordinates,
+       # pos=(0.4,0, -0.9),
+       ## frameColor=(0, 1, 0, 0.5),
+       # text_fg=(1, 1, 1, 1)
+       # )
     ##### Instructions for coordinate input #####    
 
     ##### Instructions for grid size input #####
         self.size_label = OnscreenText(
-            text="Enter the grid size", pos=(-1.9, -0.80), scale=0.07, align=TextNode.ALeft,font= self.custom_font
+            text="Enter the grid size", pos=(-1.9, -0.9), scale=0.07, align=TextNode.ALeft,font= self.custom_font
         )
 
         self.size_entry = DirectEntry( # Create entry field for grid size input
             text="", scale=0.05, command=self.set_grid_size,
             initialText="", numLines=1, focus=0,
-            pos=(-1.24, 0, -0.8), frameColor=(0, 0, 0, 0.5),
+            pos=(-1.24, 0, -0.9), frameColor=(0, 0, 0, 0.5),
             text_fg=(1, 1, 1, 1), width=3
         )
         
-        self.size_entry.bind(DGG.ENTER, self.set_grid_size)
-        self.submit_button_size = DirectButton(
-            text="Enter size", scale=0.05, command=self.set_grid_size,
-            pos=(-0.95, 0, -0.8), frameColor=(0, 1, 0, 0.5), text_fg=(1, 1, 1, 1)
-        )
     ##### Instructions for grid size input #####
         self.timer_text = OnscreenText(text="Black: 0:00\nWhite: 0:00", pos=(-1.9, 0.6), scale=0.07, align=TextNode.ALeft, font=self.custom_font)
         self.timer_settings_frame = None
@@ -733,7 +728,7 @@ class GridDemo(ShowBase):
                 return
             x, y, z = coords
 
-            if not (0 <= x < self.size and 0 <= y < self.size and 0 <= z < self.size):
+            if not (0 <= x < self.x_size and 0 <= y < self.y_size and 0 <= z < self.z_size):
                 return
 
             pos = (x, y, z)
@@ -770,6 +765,7 @@ class GridDemo(ShowBase):
 
 
     def check_click(self):
+        
         # Check if mouse is available
         if not self.mouseWatcherNode.hasMouse():
             return
@@ -779,7 +775,10 @@ class GridDemo(ShowBase):
 
         # Set up ray from camera lens
         self.pickerRay.setFromLens(self.camNode, mpos.getX(), mpos.getY())
-
+        size = [int(x.strip()) for x in self.size.split(',')]
+        if len(size)!=3:
+            return
+        x,y,z = size
         # Traverse the scene for collisions
         self.cTrav.traverse(self.render)
 
@@ -792,7 +791,7 @@ class GridDemo(ShowBase):
 
 
             # Validate position within grid bounds
-            if not (0 <= pos_tuple[0] < self.size and 0 <= pos_tuple[1] < self.size and 0 <= pos_tuple[2] < self.size):
+            if not (0 <= pos_tuple[0] < x and 0 <= pos_tuple[1] < y and 0 <= pos_tuple[2] < z):
                 return
 
             # Check if position is already occupied
@@ -923,13 +922,15 @@ class GridDemo(ShowBase):
         self.text_captures.setText(f"Black captures: {self.black_captures}\nWhite captures: {self.white_captures}")
 
     def get_adjacent_positions(self, pos): #Return a list of adjacent positions within grid bounds
+        size = [int(x.strip()) for x in self.size.split(',')]
+        x_size,y_size,z_size = size
         x, y, z = pos
         adj = [
             (x + 1, y, z), (x - 1, y, z),
             (x, y + 1, z), (x, y - 1, z),
             (x, y, z + 1), (x, y, z - 1)
         ]
-        return [(ax, ay, az) for ax, ay, az in adj if 0 <= ax < self.size and 0 <= ay < self.size and 0 <= az < self.size]
+        return [(ax, ay, az) for ax, ay, az in adj if 0 <= ax < x_size and 0 <= ay < y_size and 0 <= az < z_size]
 
     def is_legal_move(self, pos, color):
         pos_tuple = tuple(int(round(coord)) for coord in pos)
@@ -1051,10 +1052,12 @@ class GridDemo(ShowBase):
         else:  # White stones were removed, so Black captures them
             self.black_captures += removed_count
   
-    def reset_camera(self):#Reset the camera to the center of the grid.
-        center = Point3((self.size - 1) / 2, (self.size - 1) / 2, (self.size - 1) / 2)
+    def reset_camera(self, size):
+        x, y, z = [int(x.strip()) for x in size.split(',')]
+        center = Point3((x - 1) / 2, (y - 1) / 2, (z - 1) / 2)
         self.camera_control.center = center
         self.camera_control.update_camera_position()
+        self.camera.lookAt(center)
 
     def change_camera_center(self):#Change the camera center to the clicked collision sphere.
         if self.mouseWatcherNode.hasMouse():
@@ -1078,7 +1081,7 @@ class GridDemo(ShowBase):
             line_node.hide()
 
     def show_everything(self):
-        if self.size == 1:
+        if (self.x_size == 1 or self.y_size == 1 or self.z_size == 1):
             return
         for node in self.nodes:
             node.setScale(1.0)
@@ -1088,9 +1091,9 @@ class GridDemo(ShowBase):
             line_node.show()
         
         if(self.last_plane_action==1): #If we pressed E, then it goes back to the one down, so the next time show's the same, so a player can go to the whole grid and back
-            self.current_plane = (self.current_plane - 1) % self.size
+            self.current_plane = (self.current_plane - 1) % self.z_size
         elif(self.last_plane_action==0): #Same as up comment but down
-            self.current_plane = (self.current_plane + 1) % self.size 
+            self.current_plane = (self.current_plane + 1) % self.z_size 
         elif(self.last_plane_action==None): #If a player tries to show everything but it's already showing everything and such player has never used Q or E, we do nothing
             return
 
@@ -1113,19 +1116,22 @@ class GridDemo(ShowBase):
         self.last_plane_action=0
 
     def cut_layer(self):
-            if (self.layer_count<(self.size/2)-1): # because the position start at 0, we have to shift -1 to every position.
+            if (self.x_size < 3 or self.y_size <= 3 or self.z_size <= 3): #It's a non sense to cut layer if you are playing on a plane or a 2 wide geometry.
+                return;
+            biggestaxis = max(self.x_size,self.y_size,self.z_size) # Choose the biggest axis to be the control one
+            if (self.layer_count<(biggestaxis/2)-1): # because the position start at 0, we have to shift -1 to every position.
                 for i in range(0,self.layer_count+1): #As layer_count can't be greater than half-1 the size we set a for that goes from 0 the start position to layer_count +1 so it includes it
                     for node in self.nodes: # For nodes, if they satisfied the condition then set their scale to 0 so you can't click
                         name_parts = node.getName().split('_')
                         if len(name_parts) > 1:
                             coords = name_parts[1].split(',')
                             x, y, z = [int(coord) for coord in coords]
-                            if (x <= i or y <= i or z <= i or x >= self.size-1-i or y >= self.size-1-i or z >= self.size-1-i): #If any coordinate it's the value we want to cut, cut it.
-                                node.setScale(0.0)
+                            if (x <= i or y <= i or z <= i or x >= self.x_size-1-i or y >= self.y_size-1-i or z >= self.z_size-1-i): #If any coordinate it's the value we want to cut, cut it.
+                                node.setScale(0.2)
 
                     for pos, ball_data in list(self.balls.items()): # Same on nodes for balls, set balls.scale to cero so you don't see them
                         x, y, z = pos
-                        if (x <= i or y <= i or z <= i or x >= self.size-1-i or y >= self.size-1-i or z >= self.size-1-i):
+                        if (x <= i or y <= i or z <= i or x >= self.x_size-1-i or y >= self.y_size-1-i or z >= self.z_size-1-i):
                             ball_data['node'].setScale(0.2)
                 self.layer_count+=1
             else:
@@ -1138,23 +1144,23 @@ class GridDemo(ShowBase):
                 if not hasattr(self, 'current_plane'):
                     self.current_plane = 0
                 else:
-                    self.current_plane = (self.current_plane - 1) % self.size
+                    self.current_plane = (self.current_plane - 1) % self.z_size
                 z = self.current_plane
             else:
                 z = current_z
-                if not (0 <= z < self.size):
+                if not (0 <= z < self.z_size):
                     return
         else:
             if not(current_z is None):
                 if not hasattr(self, 'current_plane'):
                     self.current_plane = 0
                 else:
-                    self.current_plane = (self.current_plane + 1) % self.size
+                    self.current_plane = (self.current_plane + 1) % self.z_size
                 z = self.current_plane
                 
             else:
                 z = current_z
-                if not (0 <= z < self.size):
+                if not (0 <= z < self.z_size):
                     return
 
         for node in self.nodes:
