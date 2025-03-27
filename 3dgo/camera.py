@@ -7,7 +7,7 @@ class Camera():
         self.mouseWatcherNode = base.mouseWatcherNode  # Get mouse input
         # Las coordenadas son en (x,y,z)
         # Variables de la cámara en coordenadas esféricas
-        self.center = ((grid_size - 1) / 2, (grid_size - 1) / 2, (grid_size - 1) / 2) # Nos posicionamos en el centro de la  grilla a generar.
+        self.center = ((grid_size) / 2, (grid_size) / 2, (grid_size) / 2) # Nos posicionamos en el centro de la  grilla a generar.
         self.radius = 30     # Radio de la esfera inicial
         self.theta = -math.pi/2    # Ángulo horizontal (en radianes) 
         self.phi = math.pi/2 # Ángulo vertical (en radianes)
@@ -87,5 +87,11 @@ class Camera():
         y = self.center[1] + self.radius * math.sin(self.phi) * math.sin(self.theta)
         z = self.center[2] + self.radius * math.cos(self.phi)
 
+        self.camera.setPos(x, y, z)
+        self.camera.lookAt(*self.center)  # Camera always look to the center
+
+    def update_camera_plane_position(self,z): #For the show one plane function
+        """Calcula la posición de la cámara en coordenadas esféricas."""
+        x,y,z_pos= self.center
         self.camera.setPos(x, y, z)
         self.camera.lookAt(*self.center)  # Camera always look to the center
