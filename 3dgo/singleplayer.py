@@ -33,7 +33,7 @@ class GridDemo(ShowBase):
         self.white_points = 0   #
         self.black_captures = 0 
         self.white_captures = 0
-        self.komi =6.5 #default komi as 6.5, it might not be proper as is a different game in some sense but anyway you can change it.
+        self.komi =0.5 #default komi as 0.5, 6.5 It's just too much.
         self.pass_count = 0  
         self.game_ended = False
         self.match_history=[] #Set of the position of the balls at any given turn, might be unefficient but I have no idea how to do it if not by this, this is for proper rewind and forward the match
