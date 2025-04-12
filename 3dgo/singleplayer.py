@@ -570,7 +570,7 @@ class GridDemo(ShowBase):
             text="", scale=0.05, command=self.set_grid_size,
             initialText="", numLines=1, focus=0,
             pos=(-1.24, 0, -0.9), frameColor=(0, 0, 0, 0.5),
-            text_fg=(1, 1, 1, 1), width=3
+            text_fg=(1, 1, 1, 1), width=7
         )
         
     ##### Instructions for grid size input #####
