@@ -1,4 +1,5 @@
 load-display pandagl
+aux-display p3tinydisplay
 window-size 1360 768
 window-title 3D-Go
 sync-video 0
