@@ -1,8 +1,8 @@
 from panda3d.core import NodePath, CollisionNode, CollisionSphere, CollisionTraverser, CollisionHandlerQueue, CollisionRay, TextNode, DirectionalLight, AmbientLight
-from panda3d.core import AntialiasAttrib
+from panda3d.core import AntialiasAttrib 
 from direct.showbase.ShowBase import ShowBase
 from direct.gui.OnscreenText import OnscreenText
-from direct.gui.DirectGui import DirectEntry, DGG, DirectOptionMenu
+from direct.gui.DirectGui import DirectEntry, DGG, DirectOptionMenu, DirectButton
 from panda3d.core import ClockObject
 from panda3d.core import Material
 from camera import Camera
@@ -105,7 +105,18 @@ class GridDemo(ShowBase):
             pos=(0, 0), scale=0.1, fg=(0, 0, 0, 1), align=TextNode.ACenter,font= self.custom_font
         )
     
-
+    def save_game(self):
+        if (self.turn==1):
+            return
+        with open("./save/savegame.txt","w") as f:
+            f.write(str(self.match_history[self.turn-2]))
+            f.close
+            
+    def load_game(self):
+        with open("./save/*.txt","r") as f:
+            loaded=f.read()
+            print (loaded)
+    
     def setup_collision_system(self):
         self.cTrav = CollisionTraverser()  # Collision traverser for raycasting
         self.pickerQueue = CollisionHandlerQueue()  # Queue to store collision results
@@ -140,6 +151,7 @@ class GridDemo(ShowBase):
         self.accept("q", self.plane_down)  # Show next horizontal plane 0 for going down, 1 to up.
         self.accept("e", self.plane_up)  # Show past horizontal plane
         self.accept("w", self.show_everything)  # Show all planes
+
 
     def call_reset_camera(self):
         self.reset_camera(self.size)
@@ -184,6 +196,8 @@ class GridDemo(ShowBase):
                   
     def end_game(self):
         self.game_ended = True
+        self.pause_timer()
+        self.show_everything()
         self.points()
         winner = "Black" if self.black_points > self.white_points else "White" if self.white_points > self.black_points else "Draw"
         self.game_over_text = OnscreenText(
@@ -195,7 +209,8 @@ class GridDemo(ShowBase):
         self.pass_count = 0
         self.white_points=0
         self.black_points=0
-        self.layer_count
+        self.layer_count =0
+        self.pause_timer()
         self.show_everything()
 
 
@@ -449,7 +464,7 @@ class GridDemo(ShowBase):
                 ("byo_time_entry", DirectEntry, {"text": "", "scale": 0.05, "command": self.set_byo_time, "initialText": "30", "pos": (1, 0, -0.8), "frameColor": (0, 0, 0, 0.5), "text_fg": (1, 1, 1, 1), "width": 4}),
                 ("byo_time_label", OnscreenText, {"text": "Byo-yomi Time (s)", "pos": (1.9, -0.80), "scale": 0.07, "align": TextNode.ARight, "font": self.custom_font}),
                 ("byo_periods_entry", DirectEntry, {"text": "", "scale": 0.05, "command": self.set_byo_periods, "initialText": "5", "pos": (1, 0, -0.9), "frameColor": (0, 0, 0, 0.5), "text_fg": (1, 1, 1, 1), "width": 4}),
-                ("byo_periods_label", OnscreenText, {"text": "Byo-yomi Periods", "pos": (1.9, -0.9), "scale": 0.07, "align": TextNode.ARight, "font": self.custom_font}),
+                ("byo_periods_label", OnscreenText, {"text": "Byo-yomi Periods", "pos": (1.9, -0.9), "scale": 0.07, "align": TextNode.ARight, "font": self.custom_font})
             ]
 
             # Create all GUI elements and store them in the dictionary
@@ -517,6 +532,12 @@ class GridDemo(ShowBase):
             align=TextNode.ALeft,
             font= self.custom_font)
         
+        self.save_game_gui = DirectButton(text=("Save game", "Saved", "Click to save", "disabled"), pos = (1.78,0,0.08),
+                 scale=.05, command=self.save_game)
+        self.load_game_gui = DirectButton(text=("Load game", "Loaded", "Click to load game", "disabled"), pos = (1.78,0,0),
+                 scale=.05, command=self.load_game)
+
+
         self.extra = OnscreenText(text="Press C for timer and extra settings",
             pos=(-1.9, 0.90),
             scale=0.07,
@@ -576,7 +597,7 @@ class GridDemo(ShowBase):
     ##### Instructions for grid size input #####
         self.timer_text = OnscreenText(text="Black: 0:00\nWhite: 0:00", pos=(-1.9, 0.6), scale=0.07, align=TextNode.ALeft, font=self.custom_font)
         self.timer_settings_frame = None
-
+        
 
     def set_timer_mode(self, mode):
         self.timer_mode = mode
