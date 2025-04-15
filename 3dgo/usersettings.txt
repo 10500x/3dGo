@@ -1,0 +1,1 @@
+#I'll add here a persistent user config, for grid, bg colour and perhaps stone shape.
