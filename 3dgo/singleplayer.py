@@ -76,7 +76,7 @@ class GridDemo(ShowBase):
 
 
          ######## WIP
-        self.model_scale=0.35 #Set the default size of the model to 0.35
+        self.model_scale=0.30 #Set the default size of the model to 0.35
         ###### WIP
         self.timer_running = False
         self.black_time = 0  # Time in seconds for black player
@@ -146,7 +146,8 @@ class GridDemo(ShowBase):
         self.accept("d", self.rewind_turn) # Bind "d" ket to the rewind button
         self.accept("z", self.pass_turn)  # Bind 'z' key to pass
         self.accept("mouse1", self.check_click)  # Left click to place pieces
-        self.accept("mouse3", self.change_camera_center)  # Right click to center camera
+        self.accept("mouse3", self.camera_control.start_rotation)
+        self.accept("mouse3-up", self.camera_control.stop_rotation)
         self.accept("r", self.call_reset_camera)  # Reset camera to grid center
         self.accept("q", self.plane_down)  # Show next horizontal plane 0 for going down, 1 to up.
         self.accept("e", self.plane_up)  # Show past horizontal plane
@@ -254,10 +255,15 @@ class GridDemo(ShowBase):
         return region
 
     def generate_grid(self, size):
-        size = [int(x.strip()) for x in size.split(',')]
-        if len(size) != 3:
-            return
-        self.x_size, self.y_size, self.z_size = size
+         try:
+            size = [int(x.strip()) for x in size_str.split(',')]
+            if len(size) == 1:
+                x_size = y_size = z_size = size[0]
+            elif len(size) == 2:
+                x_size, y_size = size
+                z_size = 1
+            else:
+                x_size, y_size, z_size = size
         # Clear existing balls
         for ball_data in list(self.balls.values()):
             ball_data['node'].removeNode()
@@ -1209,3 +1215,4 @@ class GridDemo(ShowBase):
                 line_node.hide()     
 app = GridDemo(0)  # Set the size of the board
 app.run()
+
