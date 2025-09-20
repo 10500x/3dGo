@@ -1,3 +1,4 @@
+# 3DGo
 3DGo is a Python panda3d-based project that fill the niche of people who want to play the game of Go in 3d or in different shapes of the traditional 2d game.
 
  ## Installation
