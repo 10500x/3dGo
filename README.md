@@ -2,8 +2,8 @@
 3DGo is a Python panda3d-based project that fill the niche of people who want to play the game of Go in 3d or in different shapes of the traditional 2d game.
 
  ## Installation
- For the 2d game of go, install tkinter
-For the 3d game of go, Use the package manager [pip](https://pip.pypa.io/en/stable/) to install panda3d.
+ Use the package manager [pip](https://pip.pypa.io/en/stable/) to install; for the 2d game of go, tkinter;
+For the 3d game of go, panda3d.
 ```bash
 pip install tkinter
 ```
