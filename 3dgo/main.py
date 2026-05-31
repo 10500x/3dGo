@@ -795,6 +795,7 @@ class GridDemo(ShowBase):
         self.accept("d", self.rewind_turn)
         self.accept("z", self.pass_turn)
         self.accept("mouse1", self.check_click)
+        self.accept("mouse2", self.change_camera_center)
         self.accept("mouse3", self.camera_control.start_rotation)
         self.accept("mouse3-up", self.camera_control.stop_rotation)
         self.accept("r", self.call_reset_camera)
@@ -822,6 +823,25 @@ class GridDemo(ShowBase):
     def call_reset_camera(self):
         self.reset_camera(self.size)
 
+    def change_camera_center(self):
+            if not self.mouseWatcherNode.hasMouse(): return
+            mpos = self.mouseWatcherNode.getMouse()
+            self.pickerRay.setFromLens(self.camNode, mpos.getX(), mpos.getY())
+            
+            self.cTrav.traverse(self.render)
+            if self.pickerQueue.getNumEntries() > 0:
+                self.pickerQueue.sortEntries()
+                hit = self.pickerQueue.getEntry(0)
+                
+                # Obtenemos la posición del nodo colisionado
+                pos = hit.getIntoNodePath().getParent().getPos(self.render)
+                pos_tuple = (int(round(pos.x)), int(round(pos.y)), int(round(pos.z)))
+                
+                # Reenfocamos el pivote de la cámara al nuevo nodo
+                self.camera_control.center = Point3(pos_tuple[0], pos_tuple[1], pos_tuple[2])
+                self.camera_control.update_camera_position()
+                self.camera.lookAt(self.camera_control.center)
+    
     def reset_camera(self, size):
         parts = [int(x.strip()) for x in size.split(',')]
         center = Point3((parts[0] - 1) / 2, (parts[1] - 1) / 2, (parts[2] - 1) / 2)
