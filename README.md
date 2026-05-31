@@ -12,8 +12,7 @@ or
 pip install panda3d
 ```
  ## Warnings
- 
-This is still in developing, the game it's totally playable, besides the time option that works whenever and however it wants. One problem you may encounter is that the size of the window might not fit your screen properly I'm working into fix it.
+This is still in develop, the game it's totally playable, besides the time option that works whenever and however it wants. This project is heavily vibe-coded.
 
 ## Usage
 For the 3d version, just change directory into the folder and write
