@@ -1,6 +1,6 @@
 # 3DGo
 
-3DGo is a Python and Panda3D-based project designed to fill the niche for players who want to experience the traditional game of Go (Weiqi) in full 3D geometries or experimental shapes beyond the classic 2D grid.
+3DGo is a Python and Panda3D-based project designed to fill the niche for players who want to experience the traditional game of Go (Weiqi) in 3D or experimental shapes beyond the classic 2D grid. Singleplayer only.
 
 ## Installation
 
