@@ -22,7 +22,6 @@ class GridDemo(ShowBase):
         # ========================================== #
         # 1. ENGINE & GRAPHICS SETUP                 #
         # ========================================== #
-        self.render.setAntialias(AntialiasAttrib.MLine)
         self.custom_font = self.loader.loadFont("fonts/Montserrat-Regular.ttf")
         self.background_color = (0.5, 0.5, 0.5)
         self.setBackgroundColor(self.background_color)
@@ -274,6 +273,7 @@ class GridDemo(ShowBase):
                     lines.moveTo(x, 0, z)
                     lines.drawTo(x, self.y_size - 1, z)
                 line_node = self.render.attachNewNode(lines.create())
+                line_node.setAntialias(AntialiasAttrib.M_line)
                 self.line_nodes.append(line_node)
 
             self.game_over_text.destroy()  
@@ -339,6 +339,7 @@ class GridDemo(ShowBase):
                     lines.moveTo(x, 0, z)
                     lines.drawTo(x, self.y_size - 1, z)  
                 line_node = self.render.attachNewNode(lines.create())
+                line_node.setAntialias(AntialiasAttrib.M_line)
                 self.line_nodes.append(line_node)
         except ValueError:
             return
