@@ -1,10 +1,12 @@
 from panda3d.core import NodePath, CollisionNode, CollisionSphere, CollisionTraverser, CollisionHandlerQueue, CollisionRay, TextNode, DirectionalLight, AmbientLight
-from panda3d.core import AntialiasAttrib, ClockObject, Material, Point3, LineSegs, WindowProperties
+from panda3d.core import AntialiasAttrib, ClockObject, Material, Point3, LineSegs
 from panda3d.core import loadPrcFile
 from direct.showbase.ShowBase import ShowBase
 from direct.gui.OnscreenText import OnscreenText
 from direct.gui.DirectGui import DirectEntry, DGG, DirectOptionMenu, DirectButton
 import hashlib
+import json
+import os
 
 from camera import Camera
 
@@ -43,7 +45,6 @@ class GridDemo(ShowBase):
         self.ball_model = self.loader.loadModel("models/sphere.bam")
         self.black_texture = self.loader.loadTexture("textures/black.png")
         self.white_texture = self.loader.loadTexture("textures/white.png")
-        self.model_scale = 0.25
 
         # ========================================== #
         # 2. GAME STATE & GRID VARIABLES             #
@@ -66,8 +67,6 @@ class GridDemo(ShowBase):
         self.game_ended = False
         self.match_history = []
         
-        self.vertices = []
-        self.edges = []
         self.nodes = []
         self.line_nodes = []
         self.balls = {}
@@ -83,7 +82,6 @@ class GridDemo(ShowBase):
         self.timer_running = False
         self.timer_task = None
         self.timer_mode = "No Timer"
-        self.active_timer = None
         
         self.main_time = 0
         self.increment = 0
@@ -123,22 +121,107 @@ class GridDemo(ShowBase):
     def save_game(self):
         if self.turn == 1:
             return
-        with open("./save/savegame.txt", "w") as f:
-            f.write(str(self.match_history[self.turn-2]))
+        if not os.path.exists("./save"):
+            os.makedirs("./save")
+            
+        serializable_history = []
+        for state in self.match_history:
+            serializable_balls = {f"{k[0]},{k[1]},{k[2]}": v for k, v in state['balls'].items()}
+            serializable_history.append({
+                'balls': serializable_balls,
+                'current_color': state['current_color'],
+                'turn': state['turn'],
+                'black_captures': state['black_captures'],
+                'white_captures': state['white_captures'],
+                'board_hash': state['board_hash']
+            })
+            
+        payload = {
+            'size_str': self.size,
+            'match_history': serializable_history
+        }
+        with open("./save/savegame.json", "w") as f:
+            json.dump(payload, f, indent=4)
             
     def load_game(self):
-        with open("./save/*.txt", "r") as f:
-            loaded = f.read()
-            print(loaded)
+        path = "./save/savegame.json"
+        if not os.path.exists(path):
+            print("No save file found.")
+            return
+        try:
+            with open(path, "r") as f:
+                payload = json.load(f)
+                
+            self.size = payload['size_str']
+            self.reset_game()
+            self.generate_grid(self.size)
+            
+            self.match_history = []
+            for state in payload['match_history']:
+                deserialized_balls = {}
+                for k_str, v in state['balls'].items():
+                    coords = tuple(int(c) for c in k_str.split(','))
+                    deserialized_balls[coords] = v
+                self.match_history.append({
+                    'balls': deserialized_balls,
+                    'current_color': state['current_color'],
+                    'turn': state['turn'],
+                    'black_captures': state['black_captures'],
+                    'white_captures': state['white_captures'],
+                    'board_hash': state['board_hash']
+                })
+                
+            if self.match_history:
+                last_state = self.match_history[-1]
+                for pos in list(self.balls.keys()):
+                    self.balls[pos]['node'].removeNode()
+                self.balls.clear()
+                
+                for pos, ball_data in last_state['balls'].items():
+                    model = self.ball_model.copyTo(self.render)
+                    model.setTexture(self.black_texture if ball_data['color'] == 0 else self.white_texture, 1)
+                    model.setScale(0.49)
+                    model.setPos(pos[0], pos[1], pos[2])
+                    model.setMaterial(self.myMaterial)
+                    self.balls[pos] = {'node': model, 'color': ball_data['color']}
+                    
+                self.current_color = last_state['current_color']
+                self.turn = last_state['turn']
+                self.black_captures = last_state['black_captures']
+                self.white_captures = last_state['white_captures']
+                
+                self.turn_text.setText(f"Turn: {self.turn}")
+                self.text_captures.setText(f"Black captures: {self.black_captures}\nWhite captures: {self.white_captures}")
+                self.points()
+                print("Match loaded successfully.")
+        except Exception as e:
+            print(f"Error loading game data: {e}")
 
     def reset_game(self):
         self.game_ended = False
         self.pass_count = 0
         self.white_points = 0
         self.black_points = 0
+        self.black_captures = 0
+        self.white_captures = 0
+        self.current_color = 0
+        self.turn = 1
         self.layer_count = 0
+        self.match_history = []
+        
+        for ball_data in list(self.balls.values()):
+            ball_data['node'].removeNode()
+        self.balls.clear()
+        
         self.pause_timer()
         self.show_everything()
+        
+        if hasattr(self, 'turn_text'):
+            self.turn_text.setText(f"Turn: {self.turn}")
+        if hasattr(self, 'text_captures'):
+            self.text_captures.setText(f"Black captures: {self.black_captures}\nWhite captures: {self.white_captures}")
+        if hasattr(self, 'text_points'):
+            self.text_points.setText(f"Black: {self.black_points} pts\nWhite: {self.white_points} pts")
 
     # ========================================== #
     # GRID & RENDERING                           #
@@ -146,15 +229,9 @@ class GridDemo(ShowBase):
     def generate_grid(self, size):
         try:
             parts = [int(x.strip()) for x in size.split(',')]
-            if len(parts) == 1:
-                self.x_size = self.y_size = self.z_size = parts[0]
-            elif len(parts) == 2:
-                self.x_size, self.y_size = parts
-                self.z_size = 1
-            else:
-                self.x_size, self.y_size, self.z_size = parts
+            self.x_size, self.y_size, self.z_size = parts
 
-            # Clear old state
+            # Clear old elements safely
             for ball_data in list(self.balls.values()):
                 ball_data['node'].removeNode()
             self.balls.clear()
@@ -169,9 +246,9 @@ class GridDemo(ShowBase):
             for line_node in self.line_nodes:
                 line_node.removeNode()
             self.line_nodes = []
-            self.nodes, self.edges, self.vertices = [], [], []
+            self.nodes = []
 
-            # Generate vertices
+            # Generate vertices & nodes
             for x in range(self.x_size):
                 for y in range(self.y_size):
                     for z in range(self.z_size):
@@ -183,17 +260,9 @@ class GridDemo(ShowBase):
                         collision_node.node().addSolid(collision_sphere)
                         collision_node.node().setIntoCollideMask(1)
                         collision_node.setColor(0.5, 0.5, 0.5, 1)
-                        
-                        if x + 1 < self.x_size:
-                            self.edges.append(((x, y, z), (x + 1, y, z)))
-                        if y + 1 < self.y_size:
-                            self.edges.append(((x, y, z), (x, y + 1, z)))
-                        if z + 1 < self.z_size:
-                            self.edges.append(((x, y, z), (x, y, z + 1)))
-                        self.vertices.append((x, y, z))
                         self.nodes.append(vertex_node)
 
-            # Generate Lines
+            # Generate Grid Lines
             for z in range(self.z_size):
                 lines = LineSegs()
                 lines.setThickness(1)
@@ -212,6 +281,7 @@ class GridDemo(ShowBase):
             self.place_initial_ball()
             self.custom_grid_color(self.grid_color)
         except Exception as e:
+            print(f"Error during grid generation: {e}")
             return
 
     def place_initial_ball(self): 
@@ -290,17 +360,10 @@ class GridDemo(ShowBase):
             self.current_plane = (self.current_plane + 1) % self.z_size 
 
     def plane_up(self):
-        if self.last_plane_action == 0: 
-            self.show_one_floor(0, current_z=self.current_plane)
-            self.last_plane_action = 1
         self.show_one_floor(1, self.current_plane)
         self.last_plane_action = 1
         
     def plane_down(self):
-        if self.last_plane_action == 1:
-            self.show_one_floor(1, current_z=self.current_plane)
-            self.show_one_floor(1, current_z=self.current_plane)
-            self.last_plane_action = 0
         self.show_one_floor(0, self.current_plane)
         self.last_plane_action = 0
 
@@ -365,14 +428,31 @@ class GridDemo(ShowBase):
         pos_tuple = tuple(int(round(coord)) for coord in pos)
         if not self.is_legal_move(pos_tuple, self.current_color): return
 
+        # Pure placement without double rendering actions
         model = self.ball_model.copyTo(self.render)
         texture = self.black_texture if self.current_color == 0 else self.white_texture
         model.setTexture(texture, 1)
         model.setScale(0.49)
         model.setPos(pos[0], pos[1], pos[2])
-        model.reparentTo(self.render)
         model.setMaterial(self.myMaterial)
         self.balls[pos_tuple] = {'node': model, 'color': self.current_color}
+
+        opponent_color = 1 - self.current_color
+        captured_positions = set()
+        for adj_pos in self.get_adjacent_positions(pos_tuple):
+            if adj_pos in self.balls and self.balls[adj_pos]['color'] == opponent_color:
+                group = self.get_group(adj_pos, opponent_color)
+                if not self.group_has_liberty(group):
+                    captured_positions.update(group)
+
+        if captured_positions:
+            for captured_pos in captured_positions:
+                if captured_pos in self.balls:
+                    self.balls[captured_pos]['node'].removeNode()
+                    del self.balls[captured_pos]
+            if opponent_color == 0: self.white_captures += len(captured_positions)
+            else: self.black_captures += len(captured_positions)
+            self.text_captures.setText(f"Black captures: {self.black_captures}\nWhite captures: {self.white_captures}")
 
         if self.increment > 0:
             if self.current_color == 0: self.black_time += self.increment
@@ -391,7 +471,6 @@ class GridDemo(ShowBase):
             'board_hash': self.get_board_hash()
         })
         
-        self.check_all_groups_for_captures()
         self.turn_text.setText(f"Turn: {self.turn}")
         
         if self.timer_mode != "No Timer":
@@ -409,109 +488,76 @@ class GridDemo(ShowBase):
         pos_tuple = tuple(int(round(coord)) for coord in pos)
         if pos_tuple in self.balls: return False
 
-        temp_balls = {k: v.copy() for k, v in self.balls.items()}
-        temp_balls[pos_tuple] = {'color': color}
+        # Virtual execution setup
+        sim_board = {k: v['color'] for k, v in self.balls.items()}
+        sim_board[pos_tuple] = color
         
         opponent_color = 1 - color
         captured_positions = set()
-        visited = set()
         
         for adj_pos in self.get_adjacent_positions(pos_tuple):
-            if (adj_pos in temp_balls and temp_balls[adj_pos]['color'] == opponent_color and adj_pos not in visited):
-                group = self.get_group(adj_pos, opponent_color, visited.copy(), temp_balls)
-                if group and not self.group_has_liberty(group, temp_balls):
+            if (adj_pos in sim_board and sim_board[adj_pos] == opponent_color):
+                group = self.get_virtual_group(adj_pos, opponent_color, sim_board)
+                if not self.virtual_group_has_liberty(group, sim_board):
                     captured_positions.update(group)
-                visited.update(group)
-
-        if captured_positions:
-            for captured_pos in captured_positions:
-                if captured_pos in self.balls:
-                    self.balls[captured_pos]['node'].removeNode()
-                    del self.balls[captured_pos]
-            if opponent_color == 0: self.white_captures += len(captured_positions)
-            else: self.black_captures += len(captured_positions)
-            self.text_captures.setText(f"Black captures: {self.black_captures}\nWhite captures: {self.white_captures}")
 
         for captured_pos in captured_positions:
-            if captured_pos in temp_balls:
-                del temp_balls[captured_pos]
+            del sim_board[captured_pos]
 
-        # Suicide check
-        visited = set()
-        for ball_pos in temp_balls:
-            if ball_pos not in visited and temp_balls[ball_pos]['color'] == color:
-                group = self.get_group(ball_pos, color, visited.copy(), temp_balls)
-                if not self.group_has_liberty(group, temp_balls): return False
-                visited.update(group)
+        # Suicide check on virtual board
+        player_group = self.get_virtual_group(pos_tuple, color, sim_board)
+        if not self.virtual_group_has_liberty(player_group, sim_board): 
+            return False
 
-        # Ko check
-        self.balls[pos_tuple] = {'color': color}
-        board_hash = self.get_board_hash()
-        del self.balls[pos_tuple]
-        
+        # Ko check on virtual board
+        board_hash = self.get_virtual_board_hash(sim_board)
         if len(self.match_history) >= 2:
             if self.match_history[-2].get('board_hash') == board_hash:
-                for captured_pos in captured_positions:
-                    if captured_pos not in self.balls:
-                        model = self.ball_model.copyTo(self.render)
-                        model.setTexture(self.black_texture if opponent_color == 0 else self.white_texture, 1)
-                        model.setScale(0.49)
-                        model.setPos(*captured_pos)
-                        model.reparentTo(self.render)
-                        self.balls[captured_pos] = {'node': model, 'color': opponent_color}
-                if opponent_color == 0: self.white_captures -= len(captured_positions)
-                else: self.black_captures -= len(captured_positions)
-                self.text_captures.setText(f"Black captures: {self.black_captures}\nWhite captures: {self.white_captures}")
                 return False
         return True
 
-    def check_all_groups_for_captures(self):
+    def get_virtual_group(self, pos, color, sim_board):
         visited = set()
-        captured_groups = []
-        for pos in list(self.balls.keys()):
-            if pos not in visited:
-                color = self.balls[pos]['color']
-                group = self.get_group(pos, color, visited.copy())
-                if group and not self.group_has_liberty(group):
-                    captured_groups.append((group, color))
-                visited.update(group)
-        
-        for group, color in captured_groups:
-            self.remove_group(group, color)
-        self.text_captures.setText(f"Black captures: {self.black_captures}\nWhite captures: {self.white_captures}")
-
-    def get_group(self, pos, color, visited=None, balls=None):
-        if balls is None: balls = self.balls
-        if visited is None: visited = set()
-        if pos not in balls or balls[pos]['color'] != color or pos in visited: return set()
-        
         group = set()
         to_check = [pos]
         while to_check:
             current = to_check.pop()
-            if current in visited or current not in balls or balls[current]['color'] != color: continue
+            if current in visited or current not in sim_board or sim_board[current] != color: continue
             visited.add(current)
             group.add(current)
             to_check.extend(self.get_adjacent_positions(current))
         return group
 
-    def group_has_liberty(self, group, balls=None):
-        if balls is None: balls = self.balls
+    def virtual_group_has_liberty(self, group, sim_board):
+        for pos in group:
+            for adj in self.get_adjacent_positions(pos):
+                if adj not in sim_board: return True
+        return False
+
+    def get_virtual_board_hash(self, sim_board):
+        board_state = sorted((pos, col) for pos, col in sim_board.items())
+        return hashlib.md5(str(board_state).encode()).hexdigest()
+
+    def get_group(self, pos, color, visited=None):
+        if visited is None: visited = set()
+        if pos not in self.balls or self.balls[pos]['color'] != color or pos in visited: return set()
+        
+        group = set()
+        to_check = [pos]
+        while to_check:
+            current = to_check.pop()
+            if current in visited or current not in self.balls or self.balls[current]['color'] != color: continue
+            visited.add(current)
+            group.add(current)
+            to_check.extend(self.get_adjacent_positions(current))
+        return group
+
+    def group_has_liberty(self, group):
         if not group: return False
         for pos in group:
             for adj in self.get_adjacent_positions(pos):
-                if adj not in balls and adj not in group: return True
+                if adj not in self.balls: return True
         return False
-
-    def remove_group(self, group, color):
-        removed_count = 0
-        for pos in group:
-            if pos in self.balls:
-                self.balls[pos]['node'].removeNode()
-                del self.balls[pos]
-                removed_count += 1
-        if color == 0: self.white_captures += removed_count
-        else: self.black_captures += removed_count
 
     def get_adjacent_positions(self, pos):
         x, y, z = pos
@@ -529,7 +575,7 @@ class GridDemo(ShowBase):
         self.turn += 1
         self.turn_text.setText(f"Turn: {self.turn}")
         
-        if self.timer_mode == "Byo yomi":
+        if self.timer_mode == "Byo-yomi":
             if self.current_color == 0:
                 self.black_byo_yomi_time = self.byo_time
                 self.black_byo_yomi_periods = self.byo_periods
@@ -557,8 +603,8 @@ class GridDemo(ShowBase):
     def points(self):
         self.black_points = self.black_captures + self.calculate_territory(0)
         self.white_points = self.white_captures + self.calculate_territory(1) + self.komi
-        self.text_points.setText(text=f"Black points: {self.black_points}\nWhite points: {self.white_points}")
-        self.text_captures.setText(text=f"Black captures: {self.black_captures}\nWhite captures: {self.white_captures}")
+        self.text_points.setText(text=f"Black: {self.black_points} pts\nWhite: {self.white_points} pts")
+        self.text_captures.setText(text=f"Black cap: {self.black_captures}\nWhite cap: {self.white_captures}")
 
     def calculate_territory(self, color):
         territory, visited = 0, set()
@@ -568,13 +614,16 @@ class GridDemo(ShowBase):
                     pos = (x, y, z)
                     if pos not in self.balls and pos not in visited:
                         region = self.get_region(pos, visited)
-                        is_territory = True
+                        
+                        colors_touched = set()
                         for reg_pos in region:
                             for adj in self.get_adjacent_positions(reg_pos):
-                                if adj in self.balls and self.balls[adj]['color'] != color:
-                                    is_territory = False; break
-                            if not is_territory: break
-                        if is_territory: territory += len(region)
+                                if adj in self.balls:
+                                    colors_touched.add(self.balls[adj]['color'])
+                                    
+                        # Bounded solely by one color (and not neutral/empty layout)
+                        if len(colors_touched) == 1 and color in colors_touched:
+                            territory += len(region)
         return territory
     
     def get_region(self, pos, visited):
@@ -610,7 +659,6 @@ class GridDemo(ShowBase):
             model.setTexture(self.black_texture if ball_data['color'] == 0 else self.white_texture, 1)
             model.setScale(0.49)
             model.setPos(pos[0], pos[1], pos[2])
-            model.reparentTo(self.render)
             model.setMaterial(self.myMaterial)
             self.balls[pos] = {'node': model, 'color': ball_data['color']}
 
@@ -620,8 +668,8 @@ class GridDemo(ShowBase):
         self.white_captures = prev_state['white_captures']
 
         self.turn_text.setText(f"Turn: {self.turn}")
-        self.text_captures.setText(f"Black captures: {self.black_captures}\nWhite captures: {self.white_captures}")
-        self.text_points.setText(f"Black points: {self.black_points}\nWhite points: {self.white_points}")
+        self.text_captures.setText(f"Black cap: {self.black_captures}\nWhite cap: {self.white_captures}")
+        self.points()
 
     # ========================================== #
     # TIMER SYSTEM                               #
@@ -647,13 +695,12 @@ class GridDemo(ShowBase):
         except ValueError: pass
 
     def reset_timers(self):
-        if self.timer_mode != "No timer":
+        if self.timer_mode != "No Timer":
             self.black_time = self.main_time
             self.white_time = self.main_time
             self.black_byo_periods_left = self.byo_periods
             self.white_byo_periods_left = self.byo_periods
             self.timer_running = False
-            self.active_timer = None
             self.update_timer_display()
 
     def start_timer(self):
@@ -709,7 +756,7 @@ class GridDemo(ShowBase):
         )
 
     def update_timer_display(self):
-        if self.timer_mode == "No timer":
+        if self.timer_mode == "No Timer":
             self.timer_text.setText("Black:NT\nWhite:NT")
             return
         b_mins, b_secs = divmod(int(self.black_time), 60)
@@ -776,22 +823,11 @@ class GridDemo(ShowBase):
         self.reset_camera(self.size)
 
     def reset_camera(self, size):
-        x, y, z = [int(x.strip()) for x in size.split(',')]
-        center = Point3((x - 1) / 2, (y - 1) / 2, (z - 1) / 2)
+        parts = [int(x.strip()) for x in size.split(',')]
+        center = Point3((parts[0] - 1) / 2, (parts[1] - 1) / 2, (parts[2] - 1) / 2)
         self.camera_control.center = center
         self.camera_control.update_camera_position()
         self.camera.lookAt(center)
-
-    def change_camera_center(self):
-        if self.mouseWatcherNode.hasMouse():
-            mpos = self.mouseWatcherNode.getMouse()
-            self.pickerRay.setFromLens(self.camNode, mpos.getX(), mpos.getY())
-            self.cTrav.traverse(self.render)
-            if self.pickerQueue.getNumEntries() > 0:
-                self.pickerQueue.sortEntries()
-                pos = self.pickerQueue.getEntry(0).getIntoNodePath().getParent().getPos(self.render)
-                self.camera_control.center = pos
-                self.camera_control.update_camera_position()
 
     # ========================================== #
     # USER INTERFACE (GUI)                       #
@@ -810,16 +846,24 @@ class GridDemo(ShowBase):
     def set_grid_size(self, input_text=None):
         text = self.size_entry.get() if input_text is None else str(input_text)
         try:
+            parts = [int(x.strip()) for x in text.split(',')]
+            if len(parts) == 1:
+                normalized_size = f"{parts[0]},{parts[0]},{parts[0]}"
+            elif len(parts) == 2:
+                normalized_size = f"{parts[0]},{parts[1]},1"
+            else:
+                normalized_size = f"{parts[0]},{parts[1]},{parts[2]}"
+                
+            self.size = normalized_size
             self.reset_game()
-            self.size = text
             self.generate_grid(self.size)
-            self.turn = 1
+            
             if self.timer_mode != "No Timer":
                 self.reset_timers()
                 self.pause_timer()
-            self.turn_text.setText(f"Turn: {self.turn}")
             self.size_entry["focus"] = 0
-        except Exception: return
+        except Exception: 
+            return
 
     def set_komi(self, text):
         try: self.komi = float(text)
@@ -863,34 +907,35 @@ class GridDemo(ShowBase):
         self.help_show = 1 - self.help_show 
 
     def gui_extra(self):
-        if self.extra_show == 0:
-            S, ES, Ex = 0.065, 0.05, -0.70          
-            rows = [
-                (-0.22, "Grid color (r,g,b)",  "color",      self.custom_grid_color,     "",    6),
-                (-0.33, "Bg color (r,g,b)",    "background", self.custom_background_color,"",   6),
-                (-0.44, "Komi",                "komi",       self.set_komi,              "",    4),
-                (-0.55, "Timer method",        "timer_mode", None,                       None,  0),
-                (-0.66, "Main time (s)",       "main_time",  self.set_main_time,         "300", 4),
-                (-0.77, "Increment (s)",       "increment",  self.set_increment,         "0",   4),
-                (-0.88, "Byo-yomi time (s)",   "byo_time",   self.set_byo_time,          "30",  4),
-                (-0.95, "Byo-yomi periods",    "byo_periods",self.set_byo_periods,       "5",   4),
-            ]
-            for y, label, key, cmd, init, w in rows:
-                self.extra_gui_elements[f"{key}_label"] = OnscreenText(text=label, parent=self.a2dRight, pos=(-0.03, y), scale=S, align=TextNode.ARight, font=self.custom_font)
-                if key == "timer_mode":
-                    self.extra_gui_elements["timer_mode_menu"] = DirectOptionMenu(parent=self.a2dRight, pos=(Ex, 0, y), scale=ES, items=["No Timer", "Absolute", "Fischer", "Byo-yomi"], command=self.set_timer_mode, initialitem=0, frameColor=(0, 0, 0, 0.5), text_fg=(1, 1, 1, 1))
+                if self.extra_show == 0:
+                    S, ES, Ex = 0.065, 0.05, -0.70          
+                    rows = [
+                        (-0.22, "Grid color (r,g,b)",  "color",      self.custom_grid_color,     "",    6),
+                        (-0.33, "Bg color (r,g,b)",    "background", self.custom_background_color,"",   6),
+                        (-0.44, "Komi",                "komi",       self.set_komi,              "",    4),
+                        (-0.55, "Timer method",        "timer_mode", None,                       None,  0),
+                        (-0.66, "Main time (s)",       "main_time",  self.set_main_time,         "300", 4),
+                        (-0.77, "Increment (s)",       "increment",  self.set_increment,         "0",   4),
+                        (-0.88, "Byo-yomi time (s)",   "byo_time",   self.set_byo_time,          "30",  4),
+                        (-0.95, "Byo-yomi periods",    "byo_periods",self.set_byo_periods,       "5",   4),
+                    ]
+                    for y, label, key, cmd, init, w in rows:
+                        # SE CORRIGIÓ: 'self.a2dRight' por 'self.a2dRightCenter' en las siguientes líneas
+                        self.extra_gui_elements[f"{key}_label"] = OnscreenText(text=label, parent=self.a2dRightCenter, pos=(-0.03, y), scale=S, align=TextNode.ARight, font=self.custom_font)
+                        if key == "timer_mode":
+                            self.extra_gui_elements["timer_mode_menu"] = DirectOptionMenu(parent=self.a2dRightCenter, pos=(Ex, 0, y), scale=ES, items=["No Timer", "Absolute", "Fischer", "Byo-yomi"], command=self.set_timer_mode, initialitem=0, frameColor=(0, 0, 0, 0.5), text_fg=(1, 1, 1, 1))
+                        else:
+                            entry = DirectEntry(text="", parent=self.a2dRightCenter, pos=(Ex, 0, y), scale=ES, command=cmd, initialText=init, frameColor=(0, 0, 0, 0.5), text_fg=(1, 1, 1, 1), width=w)
+                            self.extra_gui_elements[f"{key}_entry"] = entry
+                    
+                    for name in ["color_entry", "background_entry", "main_time_entry", "increment_entry", "byo_time_entry", "byo_periods_entry"]:
+                        if name in self.extra_gui_elements:
+                            self.extra_gui_elements[name].bind(DGG.ENTER, lambda event, n=name: self.extra_gui_elements[n]["command"](self.extra_gui_elements[n].get()))
                 else:
-                    entry = DirectEntry(text="", parent=self.a2dRight, pos=(Ex, 0, y), scale=ES, command=cmd, initialText=init, frameColor=(0, 0, 0, 0.5), text_fg=(1, 1, 1, 1), width=w)
-                    self.extra_gui_elements[f"{key}_entry"] = entry
-            
-            for name in ["color_entry", "background_entry", "main_time_entry", "increment_entry", "byo_time_entry", "byo_periods_entry"]:
-                if name in self.extra_gui_elements:
-                    self.extra_gui_elements[name].bind(DGG.ENTER, lambda event, n=name: self.extra_gui_elements[n]["command"](self.extra_gui_elements[n].get()))
-        else:
-            for element in self.extra_gui_elements.values():
-                if element is not None: element.destroy()
-            self.extra_gui_elements.clear()
-        self.extra_show = 1 - self.extra_show
+                    for element in self.extra_gui_elements.values():
+                        if element is not None: element.destroy()
+                    self.extra_gui_elements.clear()
+                self.extra_show = 1 - self.extra_show
 
 app = GridDemo(0)
 app.run()
