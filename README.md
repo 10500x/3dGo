@@ -4,6 +4,9 @@
 
 ## Installation
 
+### By release
+Just download you respective os release, extract and open the file `3DGo.exe`
+
 ### Prerequisites
 * **Python 3.x**
 * **Tkinter** (Only required if running the 2D module. Built-in on Windows/macOS. For Linux/Arch, install via your package manager: e.g., `sudo pacman -S tk`).
